@@ -1,0 +1,10 @@
+{
+  "version": "2",
+  "remote": {
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.18/deno/context.ts": "1820825b17c83b857ae2da83d86b18f38f09f72b1511726d40c65273344e1687",
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.18/deno/core/channel.ts": "20b599763659b0b6c7c59746b0be25785e5471d198a5873c77ab11c5013cbe9c",
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.18/deno/core/completer.ts": "9796e4948cfd65f346905251d094bbc0cac3a2a88e0faadb4e6f1a66b6b2af89",
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.18/deno/core/exception.ts": "8ab9550217bfed7df2899a482a778ee17175c9ab385a8007296be620b9ca510e",
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.18/deno/core/values.ts": "5edd0d484113a5ca81fb1494fac5baa3aaf12295df5d7cab935f258e03045c75"
+  }
+}
