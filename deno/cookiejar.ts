@@ -57,7 +57,7 @@ export interface Options {
   // A nil value is valid and may be useful for testing but it is not
   // secure: it means that the HTTP server for foo.co.uk can set a cookie
   // for bar.co.uk.
-  PublicSuffixList?: PublicSuffixList;
+  publicSuffixList?: PublicSuffixList;
 }
 
 // entry is the internal representation of a cookie.
@@ -126,8 +126,8 @@ export class Jar implements CookieJar {
   // nextSeqNum is the next sequence number assigned to a new cookie
   // created SetCookies.
   private nextSeqNum_ = BigInt(0);
-  constructor(opts: Options) {
-    this.psList_ = opts.PublicSuffixList;
+  constructor(opts?: Options) {
+    this.psList_ = opts?.publicSuffixList;
   }
   /**
    * returns undefined if the URL.protocol is not HTTP or HTTPS.
@@ -137,7 +137,7 @@ export class Jar implements CookieJar {
   }
   // cookies is like Cookies but takes the current time as a parameter.
   private _cookies(u: URL, now: number): Array<Cookie> | undefined {
-    if (u.protocol != "http" && u.protocol != "https") {
+    if (u.protocol != "http:" && u.protocol != "https:") {
       return;
     }
     const host = canonicalHost(u.host);
@@ -149,7 +149,7 @@ export class Jar implements CookieJar {
       return;
     }
 
-    const https = u.protocol == "https";
+    const https = u.protocol == "https:";
     let path = u.pathname;
     if (path == "") {
       path = "/";
@@ -211,12 +211,11 @@ export class Jar implements CookieJar {
   setCookies(u: URL, cookies: Array<Cookie>): void {
     this._setCookies(u, cookies, Date.now());
   }
-  // setCookies is like SetCookies but takes the current time as parameter.
   private _setCookies(u: URL, cookies: Array<Cookie>, now: number): void {
     if (cookies.length == 0) {
       return;
     }
-    if (u.protocol != "http" && u.protocol != "https") {
+    if (u.protocol != "http:" && u.protocol != "https:") {
       return;
     }
     const host = canonicalHost(u.host);

@@ -47,6 +47,7 @@ deps(
   define("std", "https://deno.land/std@0.167.0", [
     "testing/asserts.ts",
     "http/cookie.ts",
+    "datetime/mod.ts",
   ]),
   define(
     "easyts",
@@ -55,6 +56,13 @@ deps(
       "core/channel.ts",
       "core/exception.ts",
       "context.ts",
+    ],
+  ),
+  define(
+    "luxon",
+    "https://cdn.jsdelivr.net/npm/luxon@3.1.0/build/es6",
+    [
+      "luxon.js",
     ],
   ),
 );

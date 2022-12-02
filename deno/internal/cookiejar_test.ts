@@ -218,41 +218,48 @@ Deno.test("DefaultPath", () => {
     }
   }
 });
-Deno.test("DefaultPath", () => {
-  const tests: Array<[string, string, string, boolean]> = [
-    ["www.example.com", "", "www.example.com", true],
-    ["127.0.0.1", "", "127.0.0.1", true],
-    ["2001:4860:0:2001::68", "", "2001:4860:0:2001::68", true],
-    ["www.example.com", "example.com", "example.com", false],
-    ["www.example.com", ".example.com", "example.com", false],
-    ["www.example.com", "www.example.com", "www.example.com", false],
-    ["www.example.com", ".www.example.com", "www.example.com", false],
-    ["foo.sso.example.com", "sso.example.com", "sso.example.com", false],
-    ["bar.co.uk", "bar.co.uk", "bar.co.uk", false],
-    ["foo.bar.co.uk", ".bar.co.uk", "bar.co.uk", false],
-    ["127.0.0.1", "127.0.0.1", "", false],
+Deno.test("DomainAndType", () => {
+  const tests: Array<[string, string, string, boolean, boolean]> = [
+    ["www.example.com", "", "www.example.com", true, false],
+    ["127.0.0.1", "", "127.0.0.1", true, false],
+    ["2001:4860:0:2001::68", "", "2001:4860:0:2001::68", true, false],
+    ["www.example.com", "example.com", "example.com", false, false],
+    ["www.example.com", ".example.com", "example.com", false, false],
+    ["www.example.com", "www.example.com", "www.example.com", false, false],
+    ["www.example.com", ".www.example.com", "www.example.com", false, false],
+    ["foo.sso.example.com", "sso.example.com", "sso.example.com", false, false],
+    ["bar.co.uk", "bar.co.uk", "bar.co.uk", false, false],
+    ["foo.bar.co.uk", ".bar.co.uk", "bar.co.uk", false, false],
+    ["127.0.0.1", "127.0.0.1", "", false, true],
     [
       "2001:4860:0:2001::68",
       "2001:4860:0:2001::68",
       "2001:4860:0:2001::68",
       false,
+      true,
     ],
-    ["www.example.com", ".", "", false],
-    ["www.example.com", "..", "", false],
-    ["www.example.com", "other.com", "", false],
-    ["www.example.com", "com", "", false],
-    ["www.example.com", ".com", "", false],
-    ["foo.bar.co.uk", ".co.uk", "", false],
-    ["127.www.0.0.1", "127.0.0.1", "", false],
-    ["com", "", "com", true],
-    ["com", "com", "com", true],
-    ["com", ".com", "com", true],
-    ["co.uk", "", "co.uk", true],
-    ["co.uk", "co.uk", "co.uk", true],
-    ["co.uk", ".co.uk", "co.uk", true],
+    ["www.example.com", ".", "", false, true],
+    ["www.example.com", "..", "", false, true],
+    ["www.example.com", "other.com", "", false, true],
+    ["www.example.com", "com", "", false, true],
+    ["www.example.com", ".com", "", false, true],
+    ["foo.bar.co.uk", ".co.uk", "", false, true],
+    ["127.www.0.0.1", "127.0.0.1", "", false, true],
+    ["com", "", "com", true, false],
+    ["com", "com", "com", true, false],
+    ["com", ".com", "com", true, false],
+    ["co.uk", "", "co.uk", true, false],
+    ["co.uk", "co.uk", "co.uk", true, false],
+    ["co.uk", ".co.uk", "co.uk", true, false],
   ];
-  for (const [host, domain, wantDomain, wantHostOnly] of tests) {
-    const [d, hostOnly, ok] = domainAndType(host, domain);
+  for (const [host, domain, wantDomain, wantHostOnly, err] of tests) {
+    const [d, hostOnly, ok] = domainAndType(host, domain, testPublicSuffix);
+    assertEquals(ok, err, ` ${host} ${domain}`);
+
+    if (err) {
+      continue;
+    }
+
     assertEquals(d, wantDomain);
     assertEquals(hostOnly, wantHostOnly);
   }
