@@ -44,8 +44,9 @@ async function deps(output: string, ...deps: Array<Dependency>) {
 
 deps(
   "deps",
-  define("std", "https://deno.land/std@0.165.0", [
+  define("std", "https://deno.land/std@0.167.0", [
     "testing/asserts.ts",
+    "http/cookie.ts",
   ]),
   define(
     "easyts",

@@ -3,16 +3,70 @@ import { background, Context } from "../deps/easyts/context.ts";
 import { Chan, selectChan } from "../deps/easyts/core/channel.ts";
 
 import { Method } from "./method.ts";
-
+export interface ClientInit {
+  /**
+   * A string indicating how the request will interact with the browser's cache
+   * to set request's cache.
+   */
+  cache?: RequestCache;
+  /**
+   * A string indicating whether credentials will be sent with the request
+   * always, never, or only when sent to a same-origin URL. Sets request's
+   * credentials.
+   */
+  credentials?: RequestCredentials;
+  /**
+   * A Headers object, an object literal, or an array of two-item arrays to set
+   * request's headers.
+   */
+  headers?: HeadersInit;
+  /**
+   * A cryptographic hash of the resource to be fetched by request. Sets
+   * request's integrity.
+   */
+  integrity?: string;
+  /**
+   * A boolean to set request's keepalive.
+   */
+  keepalive?: boolean;
+  /**
+   * A string to set request's method.
+   */
+  method?: string;
+  /**
+   * A string to indicate whether the request will use CORS, or will be
+   * restricted to same-origin URLs. Sets request's mode.
+   */
+  mode?: RequestMode;
+  /**
+   * A string indicating whether request follows redirects, results in an error
+   * upon encountering a redirect, or returns the redirect (in an opaque
+   * fashion). Sets request's redirect.
+   */
+  redirect?: RequestRedirect;
+  /**
+   * A string whose value is a same-origin URL, "about:client", or the empty
+   * string, to set request's referrer.
+   */
+  referrer?: string;
+  /**
+   * A referrer policy to set request's referrerPolicy.
+   */
+  referrerPolicy?: ReferrerPolicy;
+  /**
+   * An AbortSignal to set request's signal.
+   */
+  signal?: AbortSignal | null;
+}
 export interface ClientOptions {
   readonly ctx?: Context;
   readonly baseURL?: URL | string;
-  readonly init?: RequestInit;
+  readonly init?: ClientInit;
   readonly fetch?: (
+    ctx: Context,
     request: Request,
   ) => Promise<Response>;
 }
-
 export class Client {
   constructor(public readonly opts?: ClientOptions) {}
   context(): Context {
@@ -162,7 +216,7 @@ export class Client {
     url: URL,
     init?: RequestInit,
   ): Promise<Response> {
-    const signal = init?.signal;
+    const signal = init?.signal ?? this.opts?.init?.signal;
 
     if (signal && signal.aborted) {
       throw signal.reason;
@@ -185,7 +239,7 @@ export class Client {
       const c = new Chan<any>(1);
       const respCase = c.readCase();
 
-      this._fetch(c, this._make(url, init, ctl.signal));
+      this._fetch(ctx, c, this._make(url, init, ctl.signal));
 
       switch (
         await selectChan(signalCase, doneCase, respCase)
@@ -243,7 +297,7 @@ export class Client {
       }
     }
     return new Request(url, {
-      body: init?.body ?? def?.body,
+      body: init?.body,
       cache: init?.cache ?? def?.cache,
       credentials: init?.credentials ?? def?.credentials,
       headers: h,
@@ -255,30 +309,15 @@ export class Client {
       referrer: init?.referrer ?? def?.referrer,
       referrerPolicy: init?.referrerPolicy ?? def?.referrerPolicy,
       signal: signal,
-      window: init?.window ?? def?.window,
     });
   }
-  private async _fetch(c: Chan<any>, req: Request) {
+  private async _fetch(ctx: Context, c: Chan<any>, req: Request) {
     try {
-      const f = this.opts?.fetch ?? fetch;
-      const resp = await f(req);
+      const f = this.opts?.fetch;
+      const resp = await (f ? f(ctx, req) : fetch(req));
       c.write(resp);
     } catch (e) {
       c.write(e);
     }
   }
-}
-try {
-  const ctx = background().withCancel();
-  // ctx.cancel();
-  const resp = await new Client({
-    baseURL: "http://127.0.0.1/api",
-    async fetch(req): Promise<Response> {
-      console.log(`${req.method} ${req.url}`);
-      return await fetch(req);
-    },
-  }).get(ctx, "v1");
-  console.log(resp.headers);
-} catch (e) {
-  console.log("err", e);
 }
