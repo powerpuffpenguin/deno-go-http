@@ -1,4 +1,4 @@
-import { Cookie } from "../deps/std/http/cookie.ts";
+import { Cookie } from "./cookie.ts";
 import {
   canonicalHost,
   defaultPath,
