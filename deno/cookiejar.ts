@@ -1,3 +1,4 @@
+import { Context } from "../deps/easyts/context.ts";
 import { Cookie } from "./cookie.ts";
 import {
   canonicalHost,
@@ -12,14 +13,21 @@ export interface CookieJar {
    * given URL.  It may or may not choose to save the cookies, depending
    * on the jar's policy and implementation.
    */
-  setCookies(u: URL, cookies: Array<Cookie>): void;
+  setCookies(
+    ctx: Context,
+    u: URL,
+    cookies: Array<Cookie>,
+  ): void | Promise<void>;
 
   /**
    * Cookies returns the cookies to send in a request for the given URL.
    * It is up to the implementation to honor the standard cookie use
    * restrictions such as in RFC 6265.
    */
-  cookies(u: URL): Array<Cookie> | undefined;
+  cookies(
+    ctx: Context,
+    u: URL,
+  ): (Array<Cookie> | undefined) | Promise<Array<Cookie> | undefined>;
 }
 
 // PublicSuffixList provides the public suffix of a domain. For example:
@@ -132,7 +140,7 @@ export class Jar implements CookieJar {
   /**
    * returns undefined if the URL.protocol is not HTTP or HTTPS.
    */
-  cookies(u: URL): Array<Cookie> | undefined {
+  cookies(_: Context, u: URL): Array<Cookie> | undefined {
     return this._cookies(u, Date.now());
   }
   // cookies is like Cookies but takes the current time as a parameter.
@@ -208,7 +216,7 @@ export class Jar implements CookieJar {
   /**
    * It does nothing if the URL.protocol is not HTTP or HTTPS.
    */
-  setCookies(u: URL, cookies: Array<Cookie>): void {
+  setCookies(_: Context, u: URL, cookies: Array<Cookie>): void {
     this._setCookies(u, cookies, Date.now());
   }
   private _setCookies(u: URL, cookies: Array<Cookie>, now: number): void {

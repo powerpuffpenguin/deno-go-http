@@ -1,8 +1,30 @@
 // deno-lint-ignore-file no-explicit-any
 import { background, Context } from "../deps/easyts/context.ts";
 import { Chan, selectChan } from "../deps/easyts/core/channel.ts";
-
 import { Method } from "./method.ts";
+import { Cookie, getSetCookies, setCookie } from "./cookie.ts";
+export interface CookieJar {
+  /**
+   * SetCookies handles the receipt of the cookies in a reply for the
+   * given URL.  It may or may not choose to save the cookies, depending
+   * on the jar's policy and implementation.
+   */
+  setCookies(
+    ctx: Context,
+    u: URL,
+    cookies: Array<Cookie>,
+  ): void | Promise<void>;
+
+  /**
+   * Cookies returns the cookies to send in a request for the given URL.
+   * It is up to the implementation to honor the standard cookie use
+   * restrictions such as in RFC 6265.
+   */
+  cookies(
+    ctx: Context,
+    u: URL,
+  ): (Array<Cookie> | undefined) | Promise<Array<Cookie> | undefined>;
+}
 export interface ClientInit {
   /**
    * A string indicating how the request will interact with the browser's cache
@@ -62,6 +84,7 @@ export interface ClientOptions {
   readonly ctx?: Context;
   readonly baseURL?: URL | string;
   readonly init?: ClientInit;
+  readonly jar?: CookieJar;
   readonly fetch?: (
     ctx: Context,
     request: Request,
@@ -239,7 +262,7 @@ export class Client {
       const c = new Chan<any>(1);
       const respCase = c.readCase();
 
-      this._fetch(ctx, c, this._make(url, init, ctl.signal));
+      this._fetch(ctx, c, url, this._make(url, init, ctl.signal));
 
       switch (
         await selectChan(signalCase, doneCase, respCase)
@@ -311,10 +334,26 @@ export class Client {
       signal: signal,
     });
   }
-  private async _fetch(ctx: Context, c: Chan<any>, req: Request) {
+  private async _fetch(ctx: Context, c: Chan<any>, url: URL, req: Request) {
     try {
-      const f = this.opts?.fetch;
+      const opts = this.opts;
+      const jar = opts?.jar;
+      if (jar) {
+        const cookies = await jar.cookies(ctx, url);
+        if (cookies) {
+          for (const c of cookies) {
+            setCookie(req.headers, c);
+          }
+        }
+      }
+      const f = opts?.fetch;
       const resp = await (f ? f(ctx, req) : fetch(req));
+      if (jar) {
+        const cookies = getSetCookies(resp.headers);
+        if (cookies.length > 0) {
+          await jar.setCookies(ctx, url, cookies);
+        }
+      }
       c.write(resp);
     } catch (e) {
       c.write(e);

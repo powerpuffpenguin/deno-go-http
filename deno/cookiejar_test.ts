@@ -720,3 +720,294 @@ Deno.test("ChromiumBasics", () => {
     test.run(jar);
   }
 });
+Deno.test("ChromiumDomain", () => {
+  const tests: Array<jarTest> = [
+    new jarTest(
+      "Fill #1.",
+      "http://www.google.izzle",
+      ["A=B"],
+      "A=B",
+      [make("http://www.google.izzle", "A=B")],
+    ),
+    new jarTest(
+      "Fill #2.",
+      "http://www.google.izzle",
+      ["C=D; domain=.google.izzle"],
+      "A=B C=D",
+      [make("http://www.google.izzle", "A=B C=D")],
+    ),
+    new jarTest(
+      "Verify A is a host cookie and not accessible from subdomain.",
+      "http://unused.nil",
+      [],
+      "A=B C=D",
+      [make("http://foo.www.google.izzle", "C=D")],
+    ),
+    new jarTest(
+      "Verify domain cookies are found on proper domain.",
+      "http://www.google.izzle",
+      ["E=F; domain=.www.google.izzle"],
+      "A=B C=D E=F",
+      [make("http://www.google.izzle", "A=B C=D E=F")],
+    ),
+    new jarTest(
+      "Leading dots in domain attributes are optional.",
+      "http://www.google.izzle",
+      ["G=H; domain=www.google.izzle"],
+      "A=B C=D E=F G=H",
+      [make("http://www.google.izzle", "A=B C=D E=F G=H")],
+    ),
+    new jarTest(
+      "Verify domain enforcement works #1.",
+      "http://www.google.izzle",
+      ["K=L; domain=.bar.www.google.izzle"],
+      "A=B C=D E=F G=H",
+      [make("http://bar.www.google.izzle", "C=D E=F G=H")],
+    ),
+    new jarTest(
+      "Verify domain enforcement works #2.",
+      "http://unused.nil",
+      [],
+      "A=B C=D E=F G=H",
+      [make("http://www.google.izzle", "A=B C=D E=F G=H")],
+    ),
+  ];
+  const jar = newTestJar();
+  for (const test of tests) {
+    test.run(jar);
+  }
+});
+Deno.test("ChromiumDeletion", () => {
+  const tests: Array<jarTest> = [
+    new jarTest(
+      "Create session cookie a1.",
+      "http://www.google.com",
+      ["a=1"],
+      "a=1",
+      [make("http://www.google.com", "a=1")],
+    ),
+    new jarTest(
+      "Delete sc a1 via MaxAge.",
+      "http://www.google.com",
+      ["a=1; max-age=-1"],
+      "",
+      [make("http://www.google.com", "")],
+    ),
+    new jarTest(
+      "Create session cookie b2.",
+      "http://www.google.com",
+      ["b=2"],
+      "b=2",
+      [make("http://www.google.com", "b=2")],
+    ),
+    new jarTest(
+      "Delete sc b2 via Expires.",
+      "http://www.google.com",
+      ["b=2; " + expiresIn(-10)],
+      "",
+      [make("http://www.google.com", "")],
+    ),
+    new jarTest(
+      "Create persistent cookie c3.",
+      "http://www.google.com",
+      ["c=3; max-age=3600"],
+      "c=3",
+      [make("http://www.google.com", "c=3")],
+    ),
+    new jarTest(
+      "Delete pc c3 via MaxAge.",
+      "http://www.google.com",
+      ["c=3; max-age=-1"],
+      "",
+      [make("http://www.google.com", "")],
+    ),
+    new jarTest(
+      "Create persistent cookie d4.",
+      "http://www.google.com",
+      ["d=4; max-age=3600"],
+      "d=4",
+      [make("http://www.google.com", "d=4")],
+    ),
+    new jarTest(
+      "Delete pc d4 via Expires.",
+      "http://www.google.com",
+      ["d=4; " + expiresIn(-10)],
+      "",
+      [make("http://www.google.com", "")],
+    ),
+  ];
+  const jar = newTestJar();
+  for (const test of tests) {
+    test.run(jar);
+  }
+});
+Deno.test("DomainHandling", () => {
+  const tests: Array<jarTest> = [
+    new jarTest(
+      "Host cookie",
+      "http://www.host.test",
+      ["a=1"],
+      "a=1",
+      [
+        make("http://www.host.test", "a=1"),
+        make("http://host.test", ""),
+        make("http://bar.host.test", ""),
+        make("http://foo.www.host.test", ""),
+        make("http://other.test", ""),
+        make("http://test", ""),
+      ],
+    ),
+    new jarTest(
+      "Domain cookie #1",
+      "http://www.host.test",
+      ["a=1; domain=host.test"],
+      "a=1",
+      [
+        make("http://www.host.test", "a=1"),
+        make("http://host.test", "a=1"),
+        make("http://bar.host.test", "a=1"),
+        make("http://foo.www.host.test", "a=1"),
+        make("http://other.test", ""),
+        make("http://test", ""),
+      ],
+    ),
+    new jarTest(
+      "Domain cookie #2",
+      "http://www.host.test",
+      ["a=1; domain=.host.test"],
+      "a=1",
+      [
+        make("http://www.host.test", "a=1"),
+        make("http://host.test", "a=1"),
+        make("http://bar.host.test", "a=1"),
+        make("http://foo.www.host.test", "a=1"),
+        make("http://other.test", ""),
+        make("http://test", ""),
+      ],
+    ),
+    new jarTest(
+      "Host cookie on IDNA domain #1",
+      "http://www.bücher.test",
+      ["a=1"],
+      "a=1",
+      [
+        make("http://www.bücher.test", "a=1"),
+        make("http://www.xn--bcher-kva.test", "a=1"),
+        make("http://bücher.test", ""),
+        make("http://xn--bcher-kva.test", ""),
+        make("http://bar.bücher.test", ""),
+        make("http://bar.xn--bcher-kva.test", ""),
+        make("http://foo.www.bücher.test", ""),
+        make("http://foo.www.xn--bcher-kva.test", ""),
+        make("http://other.test", ""),
+        make("http://test", ""),
+      ],
+    ),
+    new jarTest(
+      "Host cookie on IDNA domain #2",
+      "http://www.xn--bcher-kva.test",
+      ["a=1"],
+      "a=1",
+      [
+        make("http://www.bücher.test", "a=1"),
+        make("http://www.xn--bcher-kva.test", "a=1"),
+        make("http://bücher.test", ""),
+        make("http://xn--bcher-kva.test", ""),
+        make("http://bar.bücher.test", ""),
+        make("http://bar.xn--bcher-kva.test", ""),
+        make("http://foo.www.bücher.test", ""),
+        make("http://foo.www.xn--bcher-kva.test", ""),
+        make("http://other.test", ""),
+        make("http://test", ""),
+      ],
+    ),
+    new jarTest(
+      "Domain cookie on IDNA domain #1",
+      "http://www.bücher.test",
+      ["a=1; domain=xn--bcher-kva.test"],
+      "a=1",
+      [
+        make("http://www.bücher.test", "a=1"),
+        make("http://www.xn--bcher-kva.test", "a=1"),
+        make("http://bücher.test", "a=1"),
+        make("http://xn--bcher-kva.test", "a=1"),
+        make("http://bar.bücher.test", "a=1"),
+        make("http://bar.xn--bcher-kva.test", "a=1"),
+        make("http://foo.www.bücher.test", "a=1"),
+        make("http://foo.www.xn--bcher-kva.test", "a=1"),
+        make("http://other.test", ""),
+        make("http://test", ""),
+      ],
+    ),
+    new jarTest(
+      "Domain cookie on IDNA domain #2",
+      "http://www.xn--bcher-kva.test",
+      ["a=1; domain=xn--bcher-kva.test"],
+      "a=1",
+      [
+        make("http://www.bücher.test", "a=1"),
+        make("http://www.xn--bcher-kva.test", "a=1"),
+        make("http://bücher.test", "a=1"),
+        make("http://xn--bcher-kva.test", "a=1"),
+        make("http://bar.bücher.test", "a=1"),
+        make("http://bar.xn--bcher-kva.test", "a=1"),
+        make("http://foo.www.bücher.test", "a=1"),
+        make("http://foo.www.xn--bcher-kva.test", "a=1"),
+        make("http://other.test", ""),
+        make("http://test", ""),
+      ],
+    ),
+    new jarTest(
+      "Host cookie on TLD.",
+      "http://com",
+      ["a=1"],
+      "a=1",
+      [
+        make("http://com", "a=1"),
+        make("http://any.com", ""),
+        make("http://any.test", ""),
+      ],
+    ),
+    new jarTest(
+      "Domain cookie on TLD becomes a host cookie.",
+      "http://com",
+      ["a=1; domain=com"],
+      "a=1",
+      [
+        make("http://com", "a=1"),
+        make("http://any.com", ""),
+        make("http://any.test", ""),
+      ],
+    ),
+    new jarTest(
+      "Host cookie on public suffix.",
+      "http://co.uk",
+      ["a=1"],
+      "a=1",
+      [
+        make("http://co.uk", "a=1"),
+        make("http://uk", ""),
+        make("http://some.co.uk", ""),
+        make("http://foo.some.co.uk", ""),
+        make("http://any.uk", ""),
+      ],
+    ),
+    new jarTest(
+      "Domain cookie on public suffix is ignored.",
+      "http://some.co.uk",
+      ["a=1; domain=co.uk"],
+      "",
+      [
+        make("http://co.uk", ""),
+        make("http://uk", ""),
+        make("http://some.co.uk", ""),
+        make("http://foo.some.co.uk", ""),
+        make("http://any.uk", ""),
+      ],
+    ),
+  ];
+  for (const test of tests) {
+    const jar = newTestJar();
+    test.run(jar);
+  }
+});
