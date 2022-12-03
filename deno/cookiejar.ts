@@ -317,7 +317,7 @@ export class Jar implements CookieJar {
         if (expires instanceof Date) {
           expires = expires.getTime();
         }
-        if (expires > now) {
+        if (expires <= now) {
           return [e, true, false];
         }
         e.expires = expires;

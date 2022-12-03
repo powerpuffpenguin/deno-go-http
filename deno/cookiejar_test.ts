@@ -74,7 +74,6 @@ class jarTest {
           "Set-Cookie": cs,
         }),
       );
-      console.log("set-cookie", cs, cookies.length);
       if (cookies.length != 1) {
         throw new Error(`Wrong cookie line ${cs}: ${cookies}`);
       }
@@ -486,6 +485,238 @@ Deno.test("UpdateAndDelete", () => {
   ];
   const jar = newTestJar();
   for (const test of tests) {
+    test.run(jar);
+  }
+});
+Deno.test("Expiration", () => {
+  const tests: Array<jarTest> = [
+    new jarTest(
+      "Expiration.",
+      "http://www.host.test",
+      [
+        "a=1",
+        "b=2; max-age=3",
+        "c=3; " + expiresIn(3),
+        "d=4; max-age=5",
+        "e=5; " + expiresIn(5),
+        "f=6; max-age=100",
+      ],
+      "a=1 b=2 c=3 d=4 e=5 f=6", // executed at t0 + 1001 ms
+      [
+        make("http://www.host.test", "a=1 b=2 c=3 d=4 e=5 f=6"), // t0 + 2002 ms
+        make("http://www.host.test", "a=1 d=4 e=5 f=6"), // t0 + 3003 ms
+        make("http://www.host.test", "a=1 d=4 e=5 f=6"), // t0 + 4004 ms
+        make("http://www.host.test", "a=1 f=6"), // t0 + 5005 ms
+        make("http://www.host.test", "a=1 f=6"), // t0 + 6006 ms
+      ],
+    ),
+  ];
+  const jar = newTestJar();
+  for (const test of tests) {
+    test.run(jar);
+  }
+});
+Deno.test("ChromiumBasics", () => {
+  const tests: Array<jarTest> = [
+    new jarTest(
+      "DomainWithTrailingDotTest.",
+      "http://www.google.com/",
+      [
+        "a=1; domain=.www.google.com.",
+        "b=2; domain=.www.google.com..",
+      ],
+      "",
+      [
+        make("http://www.google.com", ""),
+      ],
+    ),
+    new jarTest(
+      "ValidSubdomainTest #1.",
+      "http://a.b.c.d.com",
+      [
+        "a=1; domain=.a.b.c.d.com",
+        "b=2; domain=.b.c.d.com",
+        "c=3; domain=.c.d.com",
+        "d=4; domain=.d.com",
+      ],
+      "a=1 b=2 c=3 d=4",
+      [
+        make("http://a.b.c.d.com", "a=1 b=2 c=3 d=4"),
+        make("http://b.c.d.com", "b=2 c=3 d=4"),
+        make("http://c.d.com", "c=3 d=4"),
+        make("http://d.com", "d=4"),
+      ],
+    ),
+    new jarTest(
+      "ValidSubdomainTest #2.",
+      "http://a.b.c.d.com",
+      [
+        "a=1; domain=.a.b.c.d.com",
+        "b=2; domain=.b.c.d.com",
+        "c=3; domain=.c.d.com",
+        "d=4; domain=.d.com",
+        "X=bcd; domain=.b.c.d.com",
+        "X=cd; domain=.c.d.com",
+      ],
+      "X=bcd X=cd a=1 b=2 c=3 d=4",
+      [
+        make("http://b.c.d.com", "b=2 c=3 d=4 X=bcd X=cd"),
+        make("http://c.d.com", "c=3 d=4 X=cd"),
+      ],
+    ),
+    new jarTest(
+      "InvalidDomainTest #1.",
+      "http://foo.bar.com",
+      [
+        "a=1; domain=.yo.foo.bar.com",
+        "b=2; domain=.foo.com",
+        "c=3; domain=.bar.foo.com",
+        "d=4; domain=.foo.bar.com.net",
+        "e=5; domain=ar.com",
+        "f=6; domain=.",
+        "g=7; domain=/",
+        "h=8; domain=http://foo.bar.com",
+        "i=9; domain=..foo.bar.com",
+        "j=10; domain=..bar.com",
+        "k=11; domain=.foo.bar.com?blah",
+        "l=12; domain=.foo.bar.com/blah",
+        "m=12; domain=.foo.bar.com:80",
+        "n=14; domain=.foo.bar.com:",
+        "o=15; domain=.foo.bar.com#sup",
+      ],
+      "", // Jar is empty.
+      [make("http://foo.bar.com", "")],
+    ),
+    new jarTest(
+      "InvalidDomainTest #2.",
+      "http://foo.com.com",
+      ["a=1; domain=.foo.com.com.com"],
+      "",
+      [make("http://foo.bar.com", "")],
+    ),
+    new jarTest(
+      "DomainWithoutLeadingDotTest #1.",
+      "http://manage.hosted.filefront.com",
+      ["a=1; domain=filefront.com"],
+      "a=1",
+      [make("http://www.filefront.com", "a=1")],
+    ),
+    new jarTest(
+      "DomainWithoutLeadingDotTest #2.",
+      "http://www.google.com",
+      ["a=1; domain=www.google.com"],
+      "a=1",
+      [
+        make("http://www.google.com", "a=1"),
+        make("http://sub.www.google.com", "a=1"),
+        make("http://something-else.com", ""),
+      ],
+    ),
+    new jarTest(
+      "CaseInsensitiveDomainTest.",
+      "http://www.google.com",
+      [
+        "a=1; domain=.GOOGLE.COM",
+        "b=2; domain=.www.gOOgLE.coM",
+      ],
+      "a=1 b=2",
+      [make("http://www.google.com", "a=1 b=2")],
+    ),
+    new jarTest(
+      "TestIpAddress #1.",
+      "http://1.2.3.4/foo",
+      ["a=1; path=/"],
+      "a=1",
+      [make("http://1.2.3.4/foo", "a=1")],
+    ),
+    new jarTest(
+      "TestIpAddress #2.",
+      "http://1.2.3.4/foo",
+      [
+        "a=1; domain=.1.2.3.4",
+        "b=2; domain=.3.4",
+      ],
+      "",
+      [make("http://1.2.3.4/foo", "")],
+    ),
+    new jarTest(
+      "TestIpAddress #3.",
+      "http://1.2.3.4/foo",
+      ["a=1; domain=1.2.3.4"],
+      "",
+      [make("http://1.2.3.4/foo", "")],
+    ),
+    new jarTest(
+      "TestNonDottedAndTLD #2.",
+      "http://com./index.html",
+      ["a=1"],
+      "a=1",
+      [
+        make("http://com./index.html", "a=1"),
+        make("http://no-cookies.com./index.html", ""),
+      ],
+    ),
+    new jarTest(
+      "TestNonDottedAndTLD #3.",
+      "http://a.b",
+      [
+        "a=1; domain=.b",
+        "b=2; domain=b",
+      ],
+      "",
+      [make("http://bar.foo", "")],
+    ),
+    new jarTest(
+      "TestNonDottedAndTLD #4.",
+      "http://google.com",
+      [
+        "a=1; domain=.com",
+        "b=2; domain=com",
+      ],
+      "",
+      [make("http://google.com", "")],
+    ),
+    new jarTest(
+      "TestNonDottedAndTLD #5.",
+      "http://google.co.uk",
+      [
+        "a=1; domain=.co.uk",
+        "b=2; domain=.uk",
+      ],
+      "",
+      [
+        make("http://google.co.uk", ""),
+        make("http://else.co.com", ""),
+        make("http://else.uk", ""),
+      ],
+    ),
+    new jarTest(
+      "TestHostEndsWithDot.",
+      "http://www.google.com",
+      [
+        "a=1",
+        "b=2; domain=.www.google.com.",
+      ],
+      "a=1",
+      [make("http://www.google.com", "a=1")],
+    ),
+    new jarTest(
+      "PathTest",
+      "http://www.google.izzle",
+      ["a=1; path=/wee"],
+      "a=1",
+      [
+        make("http://www.google.izzle/wee", "a=1"),
+        make("http://www.google.izzle/wee/", "a=1"),
+        make("http://www.google.izzle/wee/war", "a=1"),
+        make("http://www.google.izzle/wee/war/more/more", "a=1"),
+        make("http://www.google.izzle/weehee", ""),
+        make("http://www.google.izzle/", ""),
+      ],
+    ),
+  ];
+  for (const test of tests) {
+    const jar = newTestJar();
     test.run(jar);
   }
 });
