@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { assertEquals } from "../deps/std/testing/asserts.ts";
-import { Jar } from "./cookiejar.ts";
-import { Cookie, getCookies, getSetCookies } from "./cookie.ts";
+import { Jar } from "./jar.ts";
+import { Cookie, getSetCookies } from "./cookie.ts";
 import { toIMF } from "../deps/std/datetime/mod.ts";
 
 const tNow = new Date(2013, 1, 1, 12, 0, 0, 0);
