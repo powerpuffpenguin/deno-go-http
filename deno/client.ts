@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
-import { background, Context } from "../deps/easyts/context.ts";
+import { background, CancelContext, Context } from "../deps/easyts/context.ts";
 import { Chan, selectChan } from "../deps/easyts/core/channel.ts";
 import { Method } from "./method.ts";
 import { Cookie, getSetCookies, setCookie } from "./cookie.ts";
@@ -106,15 +106,13 @@ export class Client {
   ): Promise<Response>;
   do(...args: Array<any>): Promise<Response> {
     let arg = args[0];
-    let ctx: Context;
+    let ctx: Context | undefined;
     let url: URL;
     let init: RequestInit | undefined;
     if (typeof arg === "string" || arg instanceof URL) {
-      ctx = this.context();
       url = new URL(arg, this.opts?.baseURL);
       init = args[1];
     } else if (arg instanceof Request) {
-      ctx = this.context();
       url = new URL(arg.url);
       init = args[1];
     } else {
@@ -137,10 +135,9 @@ export class Client {
     cu: Context | string | URL,
     url?: string | URL,
   ): Promise<Response> {
-    let ctx: Context;
+    let ctx: Context | undefined;
     let u: string | URL;
     if (url === undefined) {
-      ctx = this.context();
       u = cu as URL;
     } else {
       ctx = cu as Context;
@@ -175,10 +172,9 @@ export class Client {
     ub?: string | URL | BodyInit | null,
     body?: BodyInit | null,
   ) {
-    let ctx: Context;
+    let ctx: Context | undefined;
     let url: string | URL;
     if (typeof cu === "string" || cu instanceof URL) {
-      ctx = this.context();
       url = cu as URL;
       body = ub as BodyInit;
     } else {
@@ -234,8 +230,32 @@ export class Client {
     return this._body(Method.Patch, cu, ub, body);
   }
 
+  private _context(ctx0: Context | undefined): CancelContext {
+    const parent = this.opts?.ctx;
+    if (!ctx0) {
+      ctx0 = parent ?? background();
+      return ctx0.withCancel();
+    } else if (!parent) {
+      return ctx0.withCancel();
+    }
+    const ctx = background().withCancel();
+    (async () => {
+      const caseCtx = ctx.done.readCase();
+      const caseParent = parent.done.readCase();
+      const case0 = ctx0.done.readCase();
+      switch (await selectChan(caseCtx, caseParent, case0)) {
+        case case0:
+          ctx.cancel();
+          return;
+        case caseParent:
+          ctx.cancel();
+          return;
+      }
+    })();
+    return ctx;
+  }
   private async _do(
-    ctx0: Context,
+    ctx0: Context | undefined,
     url: URL,
     init?: RequestInit,
   ): Promise<Response> {
@@ -243,9 +263,11 @@ export class Client {
 
     if (signal && signal.aborted) {
       throw signal.reason;
+    } else if (ctx0?.isClosed) {
+      throw ctx0.err;
     }
 
-    const ctx = ctx0.withCancel();
+    const ctx = this._context(ctx0);
     let signalChan = Chan.never as Chan<any>;
     let l: any;
     if (signal) {
