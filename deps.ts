@@ -46,16 +46,15 @@ deps(
   "deps",
   define("std", "https://deno.land/std@0.167.0", [
     "testing/asserts.ts",
-    "http/cookie.ts",
-    "datetime/mod.ts",
   ]),
   define(
     "easyts",
-    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.18/deno",
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.20/deno",
     [
       "core/channel.ts",
       "core/exception.ts",
       "context.ts",
+      "net/ip.ts",
     ],
   ),
   define(

@@ -2,8 +2,16 @@
 import { background, CancelContext, Context } from "../deps/easyts/context.ts";
 import { Chan, selectChan } from "../deps/easyts/core/channel.ts";
 import { Method } from "./method.ts";
-import { getSetCookies, setCookie } from "./cookie.ts";
+import { addCookies, readSetCookies } from "./cookie.ts";
 import { CookieJar } from "./cookiejar.ts";
+import { MimeForm } from "./mime.ts";
+export type LikeURLSearchParams =
+  | string[][]
+  | Record<string, string>
+  | string
+  | URLSearchParams;
+export type LikeURL = string | URL;
+export type LikeBodyInit = BodyInit | null;
 export interface ClientInit {
   /**
    * A string indicating how the request will interact with the browser's cache
@@ -111,102 +119,160 @@ export class Client {
 
   private _nobody(
     method: string,
-    cu: Context | string | URL,
-    url?: string | URL,
+    cu: Context | LikeURL,
+    us?: LikeURL | LikeURLSearchParams,
+    params?: LikeURLSearchParams,
   ): Promise<Response> {
     let ctx: Context | undefined;
-    let u: string | URL;
-    if (url === undefined) {
-      u = cu as URL;
+    let u: LikeURL;
+    if (typeof cu === "string" || cu instanceof URL) {
+      u = cu as LikeURL;
+      params = us as LikeURLSearchParams;
     } else {
-      ctx = cu as Context;
-      u = url;
+      ctx = cu;
+      u = us as LikeURL;
     }
+    const url = new URL(u, this.opts?.baseURL);
+    if (params) {
+      const s = new URLSearchParams(params);
+      url.search = s.toString();
+    }
+    return this._do(
+      ctx,
+      url,
+      {
+        method: method,
+      },
+    );
+  }
+  get(
+    url: LikeURL,
+    search?: LikeURLSearchParams,
+  ): Promise<Response>;
+  get(
+    ctx: Context,
+    url: LikeURL,
+    search?: LikeURLSearchParams,
+  ): Promise<Response>;
+  get(
+    cu: Context | LikeURL,
+    up?: LikeURL | LikeURLSearchParams,
+    params?: LikeURLSearchParams,
+  ): Promise<Response> {
+    return this._nobody(Method.Get, cu, up, params);
+  }
+  head(url: string | URL, search?: LikeURLSearchParams): Promise<Response>;
+  head(
+    ctx: Context,
+    url: string | URL,
+    search?: LikeURLSearchParams,
+  ): Promise<Response>;
+  head(
+    cu: Context | LikeURL,
+    up?: LikeURL | LikeURLSearchParams,
+    params?: LikeURLSearchParams,
+  ): Promise<Response> {
+    return this._nobody(Method.Head, cu, up, params);
+  }
+  delete(url: string | URL, search?: LikeURLSearchParams): Promise<Response>;
+  delete(
+    ctx: Context,
+    url: string | URL,
+    search?: LikeURLSearchParams,
+  ): Promise<Response>;
+  delete(
+    cu: Context | LikeURL,
+    up?: LikeURL | LikeURLSearchParams,
+    params?: LikeURLSearchParams,
+  ): Promise<Response> {
+    return this._nobody(Method.Delete, cu, up, params);
+  }
+  private _body(
+    method: string,
+    cu: Context | LikeURL,
+    ub?: LikeURL | LikeBodyInit | string,
+    bc?: LikeBodyInit | string,
+    c?: string,
+  ) {
+    let ctx: Context | undefined;
+    let u: LikeURL;
+    let b: LikeBodyInit | undefined;
+    if (typeof cu === "string" || cu instanceof URL) {
+      u = cu as LikeURL;
+      b = ub as LikeBodyInit;
+      c = bc as string;
+    } else {
+      ctx = cu;
+      u = ub as LikeURL;
+      b = bc;
+    }
+
     return this._do(
       ctx,
       new URL(u, this.opts?.baseURL),
       {
         method: method,
+        body: b,
       },
+      c,
     );
   }
-  get(url: string | URL): Promise<Response>;
-  get(ctx: Context, url: string | URL): Promise<Response>;
-  get(cu: Context | string | URL, url?: string | URL): Promise<Response> {
-    return this._nobody(Method.Get, cu, url);
-  }
-  head(url: string | URL): Promise<Response>;
-  head(ctx: Context, url: string | URL): Promise<Response>;
-  head(cu: Context | string | URL, url?: string | URL): Promise<Response> {
-    return this._nobody(Method.Head, cu, url);
-  }
-  delete(url: string | URL): Promise<Response>;
-  delete(ctx: Context, url: string | URL): Promise<Response>;
-  delete(cu: Context | string | URL, url?: string | URL): Promise<Response> {
-    return this._nobody(Method.Delete, cu, url);
-  }
-  private _body(
-    method: string,
-    cu: Context | string | URL,
-    ub?: string | URL | BodyInit | null,
-    body?: BodyInit | null,
-  ) {
-    let ctx: Context | undefined;
-    let url: string | URL;
-    if (typeof cu === "string" || cu instanceof URL) {
-      url = cu as URL;
-      body = ub as BodyInit;
-    } else {
-      ctx = cu;
-      url = ub as URL;
-    }
-    return this._do(
-      ctx,
-      new URL(url, this.opts?.baseURL),
-      {
-        method: method,
-        body: body,
-      },
-    );
-  }
-  post(url: string | URL, body?: BodyInit | null): Promise<Response>;
+  post(
+    url: LikeURL,
+    body?: LikeBodyInit | string,
+    contextType?: string,
+  ): Promise<Response>;
   post(
     ctx: Context,
-    url: string | URL,
-    body?: BodyInit | null,
+    url: LikeURL,
+    body?: LikeBodyInit | string,
+    contextType?: string,
   ): Promise<Response>;
   post(
-    cu: Context | string | URL,
-    ub?: string | URL | BodyInit | null,
-    body?: BodyInit | null,
+    cu: Context | LikeURL,
+    ub?: LikeURL | LikeBodyInit | string,
+    bc?: LikeBodyInit | string,
+    c?: string,
   ): Promise<Response> {
-    return this._body(Method.Post, cu, ub, body);
+    return this._body(Method.Post, cu, ub, bc, c);
   }
-  put(url: string | URL, body?: BodyInit | null): Promise<Response>;
   put(
-    ctx: Context,
-    url: string | URL,
-    body?: BodyInit | null,
+    url: LikeURL,
+    body?: LikeBodyInit | string,
+    contextType?: string,
   ): Promise<Response>;
   put(
-    cu: Context | string | URL,
-    ub?: string | URL | BodyInit | null,
-    body?: BodyInit | null,
-  ): Promise<Response> {
-    return this._body(Method.Put, cu, ub, body);
-  }
-  patch(url: string | URL, body?: BodyInit | null): Promise<Response>;
-  patch(
     ctx: Context,
-    url: string | URL,
-    body?: BodyInit | null,
+    url: LikeURL,
+    body?: LikeBodyInit | string,
+    contextType?: string,
+  ): Promise<Response>;
+  put(
+    cu: Context | LikeURL,
+    ub?: LikeURL | LikeBodyInit | string,
+    bc?: LikeBodyInit | string,
+    c?: string,
+  ): Promise<Response> {
+    return this._body(Method.Put, cu, ub, bc, c);
+  }
+  patch(
+    url: LikeURL,
+    body?: LikeBodyInit | string,
+    contextType?: string,
   ): Promise<Response>;
   patch(
-    cu: Context | string | URL,
-    ub?: string | URL | BodyInit | null,
-    body?: BodyInit | null,
+    ctx: Context,
+    url: LikeURL,
+    body?: LikeBodyInit | string,
+    contextType?: string,
+  ): Promise<Response>;
+  patch(
+    cu: Context | LikeURL,
+    ub?: LikeURL | LikeBodyInit | string,
+    bc?: LikeBodyInit | string,
+    c?: string,
   ): Promise<Response> {
-    return this._body(Method.Patch, cu, ub, body);
+    return this._body(Method.Patch, cu, ub, bc, c);
   }
 
   private _context(ctx0: Context | undefined): CancelContext {
@@ -224,11 +290,12 @@ export class Client {
       const case0 = ctx0.done.readCase();
       switch (await selectChan(caseCtx, caseParent, case0)) {
         case case0:
-          ctx.cancel();
+          ctx.cancel(ctx0.err);
           return;
         case caseParent:
-          ctx.cancel();
+          ctx.cancel(parent.err);
           return;
+          // case caseCtx: return;
       }
     })();
     return ctx;
@@ -237,6 +304,7 @@ export class Client {
     ctx0: Context | undefined,
     url: URL,
     init?: RequestInit,
+    mime?: string,
   ): Promise<Response> {
     const signal = init?.signal ?? this.opts?.init?.signal;
 
@@ -263,7 +331,7 @@ export class Client {
       const c = new Chan<any>(1);
       const respCase = c.readCase();
 
-      this._fetch(ctx, c, url, this._make(url, init, ctl.signal));
+      this._fetch(ctx, c, url, this._make(url, init, ctl.signal, mime));
 
       switch (
         await selectChan(signalCase, doneCase, respCase)
@@ -302,6 +370,7 @@ export class Client {
     url: URL,
     init: RequestInit | undefined,
     signal: AbortSignal,
+    mime?: string,
   ): Request {
     const def = this.opts?.init;
     let h: undefined | Headers;
@@ -320,7 +389,7 @@ export class Client {
         }
       }
     }
-    return new Request(url, {
+    const req = new Request(url, {
       body: init?.body,
       cache: init?.cache ?? def?.cache,
       credentials: init?.credentials ?? def?.credentials,
@@ -334,6 +403,17 @@ export class Client {
       referrerPolicy: init?.referrerPolicy ?? def?.referrerPolicy,
       signal: signal,
     });
+    if (
+      req.body && (
+        req.method == Method.Post || req.method == Method.Put ||
+        req.method == Method.Patch
+      )
+    ) {
+      if (req.headers.get("context-type") === null) {
+        req.headers.set("context-type", mime ?? MimeForm);
+      }
+    }
+    return req;
   }
   private async _fetch(ctx: Context, c: Chan<any>, url: URL, req: Request) {
     try {
@@ -342,17 +422,15 @@ export class Client {
       if (jar) {
         const cookies = await jar.cookies(ctx, url);
         if (cookies) {
-          for (const c of cookies) {
-            setCookie(req.headers, c);
-          }
+          addCookies(req.headers, ...cookies);
         }
       }
       const f = opts?.fetch;
       const resp = await (f ? f(ctx, req) : fetch(req));
       if (jar) {
-        const cookies = getSetCookies(resp.headers);
-        if (cookies.length > 0) {
-          await jar.setCookies(ctx, url, cookies);
+        const cookies = readSetCookies(resp.headers);
+        if (cookies && cookies.length > 0) {
+          await jar.setCookies(ctx, url, ...cookies);
         }
       }
       c.write(resp);

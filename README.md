@@ -1,2 +1,3 @@
-# deno-http
+# deno-go-http
+
 deno's go style http library

@@ -1,14 +1,14 @@
 // deno-lint-ignore-file no-explicit-any
 import { assertEquals } from "../deps/std/testing/asserts.ts";
 import { Jar } from "./jar.ts";
-import { Cookie, getSetCookies } from "./cookie.ts";
-import { toIMF } from "../deps/std/datetime/mod.ts";
+import { Cookie, readSetCookies } from "./cookie.ts";
+import { DateTime } from "../deps/luxon/luxon.js";
 
 const tNow = new Date(2013, 1, 1, 12, 0, 0, 0);
 // expiresIn creates an expires attribute delta seconds from tNow.
 function expiresIn(delta: number): string {
-  const t = new Date(tNow.getTime() + delta * 1000);
-  return "expires=" + toIMF(t);
+  const t = DateTime.fromMillis(tNow.getTime() + delta * 1000);
+  return "expires=" + t.toHTTP();
 }
 interface IEntry {
   name: string;
@@ -69,11 +69,11 @@ class jarTest {
     for (let i = 0; i < this.setCookies.length; i++) {
       const cs = this.setCookies[i];
 
-      const cookies = getSetCookies(
+      const cookies = readSetCookies(
         new Headers({
           "Set-Cookie": cs,
         }),
-      );
+      ) ?? [];
       if (cookies.length != 1) {
         throw new Error(`Wrong cookie line ${cs}: ${cookies}`);
       }

@@ -8,6 +8,7 @@ import {
   jarKey,
 } from "./internal/cookiejar.ts";
 import { CookieJar } from "./cookiejar.ts";
+import { SameSite } from "./internal/cookie.ts";
 
 // PublicSuffixList provides the public suffix of a domain. For example:
 //      - the public suffix of "example.com" is "com",
@@ -195,7 +196,7 @@ export class Jar implements CookieJar {
   /**
    * It does nothing if the URL.protocol is not HTTP or HTTPS.
    */
-  setCookies(_: Context, u: URL, cookies: Array<Cookie>): void {
+  setCookies(_: Context, u: URL, ...cookies: Array<Cookie>): void {
     this._setCookies(u, cookies, Date.now());
   }
   private _setCookies(u: URL, cookies: Array<Cookie>, now: number): void {
@@ -296,14 +297,12 @@ export class Jar implements CookieJar {
       e.expires = now + maxAge * 1000;
       e.persistent = true;
     } else {
-      let expires = c.expires;
-      if (expires === undefined) {
+      const d = c.expires;
+      if (d === undefined) {
         e.expires = Number.MAX_SAFE_INTEGER;
         e.persistent = false;
       } else {
-        if (expires instanceof Date) {
-          expires = expires.getTime();
-        }
+        const expires = d.getTime();
         if (expires <= now) {
           return [e, true, false];
         }
@@ -317,13 +316,13 @@ export class Jar implements CookieJar {
     e.httpOnly = c.httpOnly;
 
     switch (c.sameSite) {
-      case "None":
+      case SameSite.NoneMode:
         e.sameSite = "SameSite";
         break;
-      case "Strict":
+      case SameSite.StrictMode:
         e.sameSite = "SameSite=Strict";
         break;
-      case "Lax":
+      case SameSite.LaxMode:
         e.sameSite = "SameSite=Lax";
         break;
     }

@@ -1,19 +1,64 @@
 import { Client } from "../deno/client.ts";
+import { getCookies, getSetCookies } from "../deno/cookie.ts";
 import { Jar } from "../deno/jar.ts";
 import { createDelay, createMiddleware, logger } from "../deno/middleware.ts";
+import { MimeJSON } from "../deno/mime.ts";
 import { NotFound } from "../deno/status.ts";
-const baseURL = "http://127.0.0.1:80";
+import { runServer } from "./server.ts";
+const Port = 9000;
+const baseURL = `http://localhost:${Port}/api/v1/`;
 
-async function basic() {
+async function basic(baseURL: string) {
   const client = new Client({
     baseURL: baseURL,
     jar: new Jar(), // cookie jar
   });
 
-  const resp = await client.get("");
-  console.log(`${resp.status} ${resp.statusText}`);
+  console.log("--------- get ---------");
+
+  let resp = await client.get(`echo?id=2&val=3`, { // Optional Search Params, If set overrides the value in the url parameter
+    id: "1",
+    name: "kate",
+  });
+  let body = await resp.text();
+  console.log(`${resp.status} ${resp.statusText}
+${body}`);
+
+  console.log("--------- post form ---------");
+  const search = new URLSearchParams({
+    id: "1",
+    name: "kate",
+  });
+  resp = await client.post(`echo?id=1`, search);
+  body = await resp.text();
+  console.log(`${resp.status} ${resp.statusText}
+${body}`);
+
+  console.log("--------- post json ---------");
+  resp = await client.post(
+    `echo`,
+    JSON.stringify({
+      id: "1",
+      name: "kate",
+    }),
+    MimeJSON,
+  );
+  body = await resp.text();
+  console.log(`${resp.status} ${resp.statusText}
+${body}`);
+
+  console.log("--------- cookie ---------");
+  for (let i = 0; i < 5; i++) {
+    resp = await client.get(`cookie`);
+    const body = await resp.text();
+    const cookies = getSetCookies(resp.headers);
+    console.log(`body: ${body}
+cookies: ${cookies}
+`);
+    console.log(resp.headers);
+  }
 }
-async function middleware() {
+async function middleware(baseURL: string) {
   const client = new Client({
     baseURL: baseURL,
     jar: new Jar(), // cookie jar
@@ -42,5 +87,13 @@ async function middleware() {
   await client.get("/abc");
 }
 
-await basic();
-await middleware();
+// run a server for demo
+runServer(Port);
+
+// wait server work
+await new Promise((resolve) => setTimeout(resolve, 100));
+
+// demo basic
+await basic(baseURL);
+// // demo middle
+// await middleware(baseURL);

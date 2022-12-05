@@ -9,7 +9,7 @@ export interface CookieJar {
   setCookies(
     ctx: Context,
     u: URL,
-    cookies: Array<Cookie>,
+    ...cookies: Array<Cookie>
   ): void | Promise<void>;
 
   /**

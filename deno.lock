@@ -1,17 +1,17 @@
 {
   "version": "2",
   "remote": {
-    "https://deno.land/std@0.167.0/datetime/formatter.ts": "7c8e6d16a0950f400aef41b9f1eb9168249869776ec520265dfda785d746589e",
-    "https://deno.land/std@0.167.0/datetime/mod.ts": "eb120e30ce33f23ccd885dbd38002e446c719834330ef8d1d7b4c0848ba6288e",
-    "https://deno.land/std@0.167.0/datetime/tokenizer.ts": "7381e28f6ab51cb504c7e132be31773d73ef2f3e1e50a812736962b9df1e8c47",
+    "https://cdn.jsdelivr.net/npm/luxon@3.1.0/build/es6/luxon.js": "4f8d91e0107c6d434160a9d97fd1b4960ecc14b50b881e950d72d0fb8b71ffc8",
     "https://deno.land/std@0.167.0/fmt/colors.ts": "03ad95e543d2808bc43c17a3dd29d25b43d0f16287fe562a0be89bf632454a12",
     "https://deno.land/std@0.167.0/testing/_diff.ts": "a23e7fc2b4d8daa3e158fa06856bedf5334ce2a2831e8bf9e509717f455adb2c",
     "https://deno.land/std@0.167.0/testing/_format.ts": "cd11136e1797791045e639e9f0f4640d5b4166148796cad37e6ef75f7d7f3832",
     "https://deno.land/std@0.167.0/testing/asserts.ts": "51353e79437361d4b02d8e32f3fc83b22231bc8f8d4c841d86fd32b0b0afe940",
-    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.18/deno/context.ts": "1820825b17c83b857ae2da83d86b18f38f09f72b1511726d40c65273344e1687",
-    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.18/deno/core/channel.ts": "20b599763659b0b6c7c59746b0be25785e5471d198a5873c77ab11c5013cbe9c",
-    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.18/deno/core/completer.ts": "9796e4948cfd65f346905251d094bbc0cac3a2a88e0faadb4e6f1a66b6b2af89",
-    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.18/deno/core/exception.ts": "8ab9550217bfed7df2899a482a778ee17175c9ab385a8007296be620b9ca510e",
-    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.18/deno/core/values.ts": "5edd0d484113a5ca81fb1494fac5baa3aaf12295df5d7cab935f258e03045c75"
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.20/deno/assert.ts": "7b1fd0d4373a5e085b3b0925396ad17c55ba30c70051c9e8cadd1586fcb6f0ac",
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.20/deno/context.ts": "2a4e4de9708cee47b1be5732c3b56f7b70dd5d73989991499780083b7c555137",
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.20/deno/core/channel.ts": "20b599763659b0b6c7c59746b0be25785e5471d198a5873c77ab11c5013cbe9c",
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.20/deno/core/completer.ts": "9796e4948cfd65f346905251d094bbc0cac3a2a88e0faadb4e6f1a66b6b2af89",
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.20/deno/core/exception.ts": "19f86b2d275d16be638667935dc7ba81202e7a466a2f4359be6a4098b304a4d8",
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.20/deno/core/values.ts": "5edd0d484113a5ca81fb1494fac5baa3aaf12295df5d7cab935f258e03045c75",
+    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.20/deno/net/ip.ts": "a45d54641016603049d7a962d95577043a35af6af7d0c6160f19b5d3923df971"
   }
 }
