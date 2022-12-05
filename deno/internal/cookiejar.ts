@@ -1,4 +1,7 @@
-import { isIP } from "./ip.ts";
+import { IP } from "../../deps/easyts/net/ip.ts";
+function isIP(s: string): boolean {
+  return IP.parse(s) ? true : false;
+}
 // hasDotSuffix reports whether s ends in "."+suffix.
 export function hasDotSuffix(s: string, suffix: string): boolean {
   return s.length > suffix.length &&

@@ -521,12 +521,25 @@ export function cookie(h: Headers, name: string): Cookie | undefined {
  */
 export function addCookies(h: Headers, ...cookies: Array<Cookie>): void {
   for (const c of cookies) {
-    const s = `${sanitizeCookieName(c.name)}=${sanitizeCookieValue(c.value)}`;
+    if (c.name == "") {
+      console.warn(
+        `http: invalid Cookie.name ; not added to header`,
+      );
+      continue;
+    }
+    const name = sanitizeCookieName(c.name);
+    if (!isCookieNameValid(name)) {
+      console.warn(
+        `http: invalid Cookie.name ${name} ; not added to header`,
+      );
+      continue;
+    }
+    const s = `${name}=${sanitizeCookieValue(c.value)}`;
     const str = h.get("cookie") ?? "";
     if (str == "") {
-      h.set("cookie", `${c}; ${s}`);
-    } else {
       h.set("cookie", s);
+    } else {
+      h.set("cookie", `${str}; ${s}`);
     }
   }
 }

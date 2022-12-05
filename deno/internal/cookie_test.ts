@@ -1,6 +1,15 @@
+// deno-lint-ignore-file no-explicit-any
 import { DateTime } from "../../deps/luxon/luxon.js";
 import { assertEquals } from "../../deps/std/testing/asserts.ts";
-import { Cookie, cookieString, SameSite } from "./cookie.ts";
+import {
+  addCookies,
+  Cookie,
+  cookieString,
+  readCookies,
+  readSetCookies,
+  SameSite,
+  setCookies,
+} from "./cookie.ts";
 const SameSiteDefaultMode = SameSite.DefaultMode;
 const SameSiteLaxMode = SameSite.LaxMode;
 const SameSiteNoneMode = SameSite.NoneMode;
@@ -21,12 +30,12 @@ class time {
     nsec: number,
     _: boolean,
   ) {
-    return new Date(year, month, day, hour, min, sec, nsec);
+    return DateTime.utc(year, month, day, hour, min, sec, nsec).toJSDate();
   }
   static UTC = true;
 }
 interface CookieInit {
-  Name: string;
+  Name?: string;
   Value?: string;
 
   Path?: string; // optional
@@ -62,6 +71,7 @@ function initCookie(o?: CookieInit): Cookie {
     unparsed: o?.Unparsed,
   };
 }
+
 Deno.test("WriteSetCookies", () => {
   function make(cookie: CookieInit | undefined, raw: string) {
     return {
@@ -156,5 +166,75 @@ Deno.test("WriteSetCookies", () => {
   ];
   for (const tt of tests) {
     assertEquals(cookieString(tt.Cookie), tt.Raw);
+  }
+});
+class HeaderOnlyResponseWriter {
+  constructor(public readonly h: Headers) {
+  }
+  append(name: string, value: string) {
+    this.h.append(name, value);
+  }
+}
+function headerOnlyResponseWriter(h: Headers): Headers {
+  const r: any = new HeaderOnlyResponseWriter(h);
+  return r;
+}
+function getHeaders(m: Headers, name: string): Array<string> {
+  const r = new Array<string>();
+  for (const [k, v] of m) {
+    if (k == name) {
+      r.push(v);
+    }
+  }
+  return r;
+}
+Deno.test("SetCookie", () => {
+  const m = new Headers();
+  setCookies(
+    headerOnlyResponseWriter(m),
+    initCookie({ Name: "cookie-1", Value: "one", Path: "/restricted/" }),
+    initCookie({ Name: "cookie-2", Value: "two", MaxAge: 3600 }),
+  );
+  const vals = getHeaders(m, "set-cookie");
+  assertEquals(vals.length, 2);
+
+  assertEquals(vals[0], "cookie-1=one; Path=/restricted/");
+  assertEquals(vals[1], "cookie-2=two; Max-Age=3600");
+});
+
+Deno.test("AddCookie", () => {
+  function make(arrs: Array<CookieInit>, raw: string) {
+    return {
+      Cookies: arrs.map((v) => initCookie(v)),
+      Raw: raw,
+    };
+  }
+  const tests = [
+    make(
+      [{}],
+      "",
+    ),
+    make(
+      [{ Name: "cookie-1", Value: "v$1" }],
+      "cookie-1=v$1",
+    ),
+    make(
+      [
+        { Name: "cookie-1", Value: "v$1" },
+        { Name: "cookie-2", Value: "v$2" },
+        { Name: "cookie-3", Value: "v$3" },
+      ],
+      "cookie-1=v$1; cookie-2=v$2; cookie-3=v$3",
+    ),
+  ];
+  for (const tt of tests) {
+    const h = new Headers();
+    addCookies(h, ...tt.Cookies);
+
+    assertEquals(
+      h.get("Cookie") ?? "",
+      tt.Raw,
+      `val=${h.get("Cookie")} raw=${tt.Raw}`,
+    );
   }
 });
