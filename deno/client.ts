@@ -68,10 +68,27 @@ export interface ClientInit {
   signal?: AbortSignal | null;
 }
 export interface ClientOptions {
+  /**
+   * All request's parent Context
+   */
   readonly ctx?: Context;
+  /**
+   * If the requested url is not an absolute path, use this as baseurl
+   *
+   * new URL(url,baseURL)
+   */
   readonly baseURL?: URL | string;
+  /**
+   * Similar to RequestInit but without body and window properties, can set some default values for all requests
+   */
   readonly init?: ClientInit;
+  /**
+   * If set will automatically handle cookies for the client
+   */
   readonly jar?: CookieJar;
+  /**
+   * An interceptor, all requests will call the implementation here, you can replace the underlying fetch or implement middleware here
+   */
   readonly fetch?: (
     ctx: Context,
     request: Request,

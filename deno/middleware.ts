@@ -33,12 +33,16 @@ class _Element {
       : h.fetch(ctx, request, f);
   }
 }
-export function createMiddleware(
+/**
+ * Similar to the createMiddleware function, but also replaces the underlying fetch function with a function f
+ */
+export function createMiddlewareWithFetch(
+  f: (req: Request) => Promise<Response>,
   ...middleware: Array<Handle | Middleware>
 ): NextHandle {
   return ((ctx, request) => {
     if (middleware.length == 0) {
-      return fetch(request);
+      return f(request);
     }
     let root: _Element | undefined;
     let pre: _Element | undefined;
@@ -53,6 +57,17 @@ export function createMiddleware(
     }
     return root!.fetch(ctx, request);
   });
+}
+/**
+ * Returns an interceptor that will call the middleware in the order of the array
+ *
+ * @remarks
+ * Middleware is called sequentially before the request is sent to the network, and destroyed in reverse order after the response
+ */
+export function createMiddleware(
+  ...middleware: Array<Handle | Middleware>
+): NextHandle {
+  return createMiddlewareWithFetch(fetch, ...middleware);
 }
 const Millisecond = 1;
 const Second = Millisecond * 1000;

@@ -1,5 +1,4 @@
 import { readCookie, setCookies } from "../deno/cookie.ts";
-import { Method } from "../deno/method.ts";
 import { InternalServerError, NotFound, OK } from "../deno/status.ts";
 const router: Array<{
   pattern: URLPattern;

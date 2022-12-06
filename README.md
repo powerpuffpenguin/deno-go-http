@@ -1,6 +1,6 @@
 # deno-go-http
 
-deno's go style http library
+deno's golang style http client library
 
 [document](deno/README.md)
 
