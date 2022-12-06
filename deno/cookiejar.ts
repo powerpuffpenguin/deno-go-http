@@ -21,4 +21,5 @@ export interface CookieJar {
     ctx: Context,
     u: URL,
   ): (Array<Cookie> | undefined) | Promise<Array<Cookie> | undefined>;
+  
 }

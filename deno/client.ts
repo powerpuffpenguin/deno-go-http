@@ -78,7 +78,21 @@ export interface ClientOptions {
   ) => Promise<Response>;
 }
 export class Client {
-  constructor(public readonly opts?: ClientOptions) {}
+  public readonly opts: ClientOptions | undefined;
+  constructor();
+  constructor(opts: ClientOptions);
+  constructor(baseURL: string);
+  constructor(arg?: ClientOptions | string) {
+    if (arg !== undefined) {
+      if (typeof arg === "string") {
+        this.opts = {
+          baseURL: arg,
+        };
+      } else {
+        this.opts = arg;
+      }
+    }
+  }
   context(): Context {
     return this.opts?.ctx ?? background();
   }
@@ -419,7 +433,9 @@ export class Client {
     try {
       const opts = this.opts;
       const jar = opts?.jar;
+
       if (jar) {
+        // add cookie to request
         const cookies = await jar.cookies(ctx, url);
         if (cookies) {
           addCookies(req.headers, ...cookies);
@@ -427,7 +443,9 @@ export class Client {
       }
       const f = opts?.fetch;
       const resp = await (f ? f(ctx, req) : fetch(req));
+
       if (jar) {
+        // update set-cookies to jar
         const cookies = readSetCookies(resp.headers);
         if (cookies && cookies.length > 0) {
           await jar.setCookies(ctx, url, ...cookies);

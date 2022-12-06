@@ -1,9 +1,10 @@
 import { Client } from "../deno/client.ts";
-import { getCookies, getSetCookies } from "../deno/cookie.ts";
+import { cookieString, readSetCookies } from "../deno/cookie.ts";
+
 import { Jar } from "../deno/jar.ts";
 import { createDelay, createMiddleware, logger } from "../deno/middleware.ts";
 import { MimeJSON } from "../deno/mime.ts";
-import { NotFound } from "../deno/status.ts";
+import { InternalServerError } from "../deno/status.ts";
 import { runServer } from "./server.ts";
 const Port = 9000;
 const baseURL = `http://localhost:${Port}/api/v1/`;
@@ -51,11 +52,10 @@ ${body}`);
   for (let i = 0; i < 5; i++) {
     resp = await client.get(`cookie`);
     const body = await resp.text();
-    const cookies = getSetCookies(resp.headers);
+    const cookies = readSetCookies(resp.headers)?.map((v) => cookieString(v));
     console.log(`body: ${body}
 cookies: ${cookies}
 `);
-    console.log(resp.headers);
   }
 }
 async function middleware(baseURL: string) {
@@ -67,24 +67,31 @@ async function middleware(baseURL: string) {
       // Set the middleware, the middleware will execute the installation and setting order in sequence
       logger,
       createDelay(500),
-      // retry on 404
+      // retry on 500 InternalServerError
       async (ctx, req, next) => {
-        const resp = await next(ctx, req);
-        if (resp.status === NotFound) {
+        const resp = await next(ctx, req.clone());
+        if (resp.status === InternalServerError) {
           console.log(`status ${resp.status}, retry after 100ms`);
           await ctx.sleep(100);
           if (ctx.isClosed) {
             throw ctx.err;
           }
           // retry
-          return next(ctx, req);
+          const r = req.clone();
+          r.headers.delete("deverr");
+          return next(ctx, r);
         }
         return resp;
       },
     ),
   });
-  await client.get("");
-  await client.get("/abc");
+  await client.get("no-page");
+
+  await client.do("echo", {
+    headers: {
+      deverr: "1",
+    },
+  });
 }
 
 // run a server for demo
@@ -95,5 +102,8 @@ await new Promise((resolve) => setTimeout(resolve, 100));
 
 // demo basic
 await basic(baseURL);
-// // demo middle
-// await middleware(baseURL);
+// demo middle
+await middleware(baseURL);
+
+// exit deno
+Deno.exit();

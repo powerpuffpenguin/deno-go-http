@@ -1,4 +1,5 @@
-import { getCookies, setCookie } from "../deno/cookie.ts";
+import { readCookie, setCookies } from "../deno/cookie.ts";
+import { Method } from "../deno/method.ts";
 import { InternalServerError, NotFound, OK } from "../deno/status.ts";
 const router: Array<{
   pattern: URLPattern;
@@ -10,8 +11,8 @@ const router: Array<{
     }),
     async handler(req) {
       const url = new URL(req.url);
-      const cookies = getCookies(req.headers);
-      if (cookies.get("err") === "1") {
+      const val = req.headers.get("deverr");
+      if (val == "1") {
         return new Response(`dev on err`, {
           status: InternalServerError,
         });
@@ -31,8 +32,7 @@ body: ${body}
     }),
     handler(req) {
       // get cookie
-      const cookies = getCookies(req.headers);
-      const value = cookies.get("val");
+      const value = readCookie(req.headers, "val")?.value;
       let val = value ? parseInt(value) : 0;
       if (Number.isSafeInteger(val) && val < Number.MAX_SAFE_INTEGER) {
         val++;
@@ -41,13 +41,15 @@ body: ${body}
       }
       // set cookie
       const header = new Headers();
-      setCookie(header, {
+      setCookies(header, {
         name: "val",
         value: val.toString(),
-      });
-      setCookie(header, {
+      }, {
         name: "dev",
         value: "1=2",
+      }, {
+        name: "dev2",
+        value: "2=1",
       });
       return new Response(`value: ${val}`, {
         headers: header,
@@ -86,6 +88,19 @@ export async function runServer(port: number) {
     port: port,
   });
   console.log(`http listen on: localhost:${port}`);
+
+  router.push({
+    pattern: new URLPattern({
+      pathname: "/api/v1/quit",
+    }),
+    handler(_) {
+      l.close();
+      return new Response(`quit`, {
+        status: OK,
+      });
+    },
+  });
+
   for await (const c of l) {
     (async (c) => {
       for await (const evt of Deno.serveHttp(c)) {

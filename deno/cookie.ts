@@ -1,7 +1,7 @@
 export {
   addCookies,
-  cookie,
   cookieString,
+  readCookie,
   readCookies,
   readSetCookies,
   SameSite,

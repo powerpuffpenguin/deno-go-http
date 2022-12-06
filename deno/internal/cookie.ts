@@ -2,7 +2,7 @@ import { isTokenRune } from "./httpguts.ts";
 import { IP } from "../../deps/easyts/net/ip.ts";
 import * as textproto from "./textproto.ts";
 import * as ascii from "./ascii.ts";
-import { fromHTTP, toHTTP } from "./datetime.ts";
+import { fromHTTP, toHTTP } from "../datetime.ts";
 export enum SameSite {
   DefaultMode = 1,
   LaxMode,
@@ -506,7 +506,7 @@ function _readCookies(
  *
  * If multiple cookies match the given name, only one cookie will
  */
-export function cookie(h: Headers, name: string): Cookie | undefined {
+export function readCookie(h: Headers, name: string): Cookie | undefined {
   return _readCookies(h, name, true) as undefined;
 }
 
