@@ -1,8 +1,8 @@
 // deno-lint-ignore-file no-explicit-any
-import { assertEquals } from "../deps/std/testing/asserts.ts";
+import { assertEquals } from "./deps/std/testing/asserts.ts";
 import { Jar } from "./jar.ts";
 import { Cookie, readSetCookies } from "./cookie.ts";
-import { DateTime } from "../deps/luxon/luxon.js";
+import { DateTime } from "./deps/luxon/luxon.js";
 
 const tNow = new Date(2013, 1, 1, 12, 0, 0, 0);
 // expiresIn creates an expires attribute delta seconds from tNow.

@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
-import { background, CancelContext, Context } from "../deps/easyts/context.ts";
-import { Chan, selectChan } from "../deps/easyts/core/channel.ts";
+import { background, CancelContext, Context } from "./deps/easyts/context.ts";
+import { Chan, selectChan } from "./deps/easyts/core/channel.ts";
 import { Method } from "./method.ts";
 import { addCookies, readSetCookies } from "./cookie.ts";
 import { CookieJar } from "./cookiejar.ts";

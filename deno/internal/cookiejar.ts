@@ -1,4 +1,4 @@
-import { IP } from "../../deps/easyts/net/ip.ts";
+import { IP } from "../deps/easyts/net/ip.ts";
 function isIP(s: string): boolean {
   return IP.parse(s) ? true : false;
 }

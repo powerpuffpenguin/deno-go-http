@@ -1,4 +1,4 @@
-import { DateTime } from "../deps/luxon/luxon.js";
+import { DateTime } from "./deps/luxon/luxon.js";
 export function toHTTP(d: Date): string {
   return DateTime.fromJSDate(d).toHTTP();
 }

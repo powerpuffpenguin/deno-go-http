@@ -43,7 +43,7 @@ async function deps(output: string, ...deps: Array<Dependency>) {
 }
 
 deps(
-  "deps",
+  "deno/deps",
   define("std", "https://deno.land/std@0.167.0", [
     "testing/asserts.ts",
   ]),

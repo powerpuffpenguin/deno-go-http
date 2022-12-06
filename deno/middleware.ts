@@ -1,4 +1,4 @@
-import { Context } from "../deps/easyts/context.ts";
+import { Context } from "./deps/easyts/context.ts";
 type NextHandle = (ctx: Context, request: Request) => Promise<Response>;
 
 export type Handle = (

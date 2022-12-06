@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
-import { DateTime } from "../../deps/luxon/luxon.js";
-import { assertEquals } from "../../deps/std/testing/asserts.ts";
+import { DateTime } from "../deps/luxon/luxon.js";
+import { assertEquals } from "../deps/std/testing/asserts.ts";
 import {
   addCookies,
   Cookie,

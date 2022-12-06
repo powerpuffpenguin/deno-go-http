@@ -1,4 +1,4 @@
-import { Context } from "../deps/easyts/context.ts";
+import { Context } from "./deps/easyts/context.ts";
 import { Cookie } from "./cookie.ts";
 export interface CookieJar {
   /**
@@ -21,5 +21,4 @@ export interface CookieJar {
     ctx: Context,
     u: URL,
   ): (Array<Cookie> | undefined) | Promise<Array<Cookie> | undefined>;
-  
 }

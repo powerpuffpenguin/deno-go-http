@@ -1,5 +1,5 @@
 import { isTokenRune } from "./httpguts.ts";
-import { IP } from "../../deps/easyts/net/ip.ts";
+import { IP } from "../deps/easyts/net/ip.ts";
 import * as textproto from "./textproto.ts";
 import * as ascii from "./ascii.ts";
 import { fromHTTP, toHTTP } from "../datetime.ts";

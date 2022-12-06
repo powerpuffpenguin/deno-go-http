@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
-import { assertEquals } from "../../deps/std/testing/asserts.ts";
+import { assertEquals } from "../deps/std/testing/asserts.ts";
 import {
   canonicalHost,
   defaultPath,
