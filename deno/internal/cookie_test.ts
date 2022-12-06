@@ -8,6 +8,8 @@ import {
   readCookies,
   readSetCookies,
   SameSite,
+  sanitizeCookiePath,
+  sanitizeCookieValue,
   setCookies,
 } from "./cookie.ts";
 const SameSiteDefaultMode = SameSite.DefaultMode;
@@ -236,5 +238,310 @@ Deno.test("AddCookie", () => {
       tt.Raw,
       `val=${h.get("Cookie")} raw=${tt.Raw}`,
     );
+  }
+});
+function assertCookiesEqual(l: Array<Cookie>, r: Array<Cookie>) {
+  assertEquals(l.length, r.length);
+  for (let i = 0; i < l.length; i++) {
+    assertEquals(l[i].name, r[i].name);
+    assertEquals(l[i].value, r[i].value);
+
+    assertEquals(l[i].path, r[i].path);
+    assertEquals(l[i].domain, r[i].domain);
+    assertEquals(l[i].expires, r[i].expires);
+    assertEquals(l[i].rawExpires, r[i].rawExpires);
+
+    assertEquals(l[i].maxAge, r[i].maxAge);
+    assertEquals(l[i].secure, r[i].secure);
+    assertEquals(l[i].httpOnly, r[i].httpOnly);
+    assertEquals(l[i].sameSite, r[i].sameSite);
+    assertEquals(l[i].raw, r[i].raw);
+    const len = l[i].unparsed?.length ?? 0;
+    assertEquals(len, r[i].unparsed?.length ?? 0);
+    for (let j = 0; j < len; j++) {
+      assertEquals(l[i].unparsed![j], r[i].unparsed![j]);
+    }
+  }
+}
+Deno.test("ReadSetCookies", () => {
+  function make(header: Headers, cookies: Array<CookieInit>) {
+    return {
+      header: header,
+      cookies: cookies.map(initCookie),
+    };
+  }
+  const tests = [
+    make(
+      new Headers({ "Set-Cookie": "Cookie-1=v$1" }),
+      [{ Name: "Cookie-1", Value: "v$1", Raw: "Cookie-1=v$1" }],
+    ),
+    make(
+      new Headers({
+        "Set-Cookie":
+          "NID=99=YsDT5i3E-CXax-; expires=Wed, 23-Nov-2011 01:05:03 GMT; path=/; domain=.google.ch; HttpOnly",
+      }),
+      [{
+        Name: "NID",
+        Value: "99=YsDT5i3E-CXax-",
+        Path: "/",
+        Domain: ".google.ch",
+        HttpOnly: true,
+        Expires: time.Date(2011, 11, 23, 1, 5, 3, 0, time.UTC),
+        RawExpires: "Wed, 23-Nov-2011 01:05:03 GMT",
+        Raw:
+          "NID=99=YsDT5i3E-CXax-; expires=Wed, 23-Nov-2011 01:05:03 GMT; path=/; domain=.google.ch; HttpOnly",
+      }],
+    ),
+    make(
+      new Headers({
+        "Set-Cookie":
+          ".ASPXAUTH=7E3AA; expires=Wed, 07-Mar-2012 14:25:06 GMT; path=/; HttpOnly",
+      }),
+      [{
+        Name: ".ASPXAUTH",
+        Value: "7E3AA",
+        Path: "/",
+        Expires: time.Date(2012, 3, 7, 14, 25, 6, 0, time.UTC),
+        RawExpires: "Wed, 07-Mar-2012 14:25:06 GMT",
+        HttpOnly: true,
+        Raw:
+          ".ASPXAUTH=7E3AA; expires=Wed, 07-Mar-2012 14:25:06 GMT; path=/; HttpOnly",
+      }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": "ASP.NET_SessionId=foo; path=/; HttpOnly" }),
+      [{
+        Name: "ASP.NET_SessionId",
+        Value: "foo",
+        Path: "/",
+        HttpOnly: true,
+        Raw: "ASP.NET_SessionId=foo; path=/; HttpOnly",
+      }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": "samesitedefault=foo; SameSite" }),
+      [{
+        Name: "samesitedefault",
+        Value: "foo",
+        SameSite: SameSiteDefaultMode,
+        Raw: "samesitedefault=foo; SameSite",
+      }],
+    ),
+    make(
+      new Headers({
+        "Set-Cookie": "samesiteinvalidisdefault=foo; SameSite=invalid",
+      }),
+      [{
+        Name: "samesiteinvalidisdefault",
+        Value: "foo",
+        SameSite: SameSiteDefaultMode,
+        Raw: "samesiteinvalidisdefault=foo; SameSite=invalid",
+      }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": "samesitelax=foo; SameSite=Lax" }),
+      [{
+        Name: "samesitelax",
+        Value: "foo",
+        SameSite: SameSiteLaxMode,
+        Raw: "samesitelax=foo; SameSite=Lax",
+      }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": "samesitestrict=foo; SameSite=Strict" }),
+      [{
+        Name: "samesitestrict",
+        Value: "foo",
+        SameSite: SameSiteStrictMode,
+        Raw: "samesitestrict=foo; SameSite=Strict",
+      }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": "samesitenone=foo; SameSite=None" }),
+      [{
+        Name: "samesitenone",
+        Value: "foo",
+        SameSite: SameSiteNoneMode,
+        Raw: "samesitenone=foo; SameSite=None",
+      }],
+    ),
+    // Make sure we can properly read back the Set-Cookie headers we create
+    // for values containing spaces or commas:
+    make(
+      new Headers({ "Set-Cookie": `special-1=a z` }),
+      [{ Name: "special-1", Value: "a z", Raw: `special-1=a z` }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": `special-2=" z"` }),
+      [{ Name: "special-2", Value: " z", Raw: `special-2=" z"` }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": `special-3="a "` }),
+      [{ Name: "special-3", Value: "a ", Raw: `special-3="a "` }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": `special-4=" "` }),
+      [{ Name: "special-4", Value: " ", Raw: `special-4=" "` }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": `special-5=a,z` }),
+      [{ Name: "special-5", Value: "a,z", Raw: `special-5=a,z` }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": `special-6=",z"` }),
+      [{ Name: "special-6", Value: ",z", Raw: `special-6=",z"` }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": `special-7=a,` }),
+      [{ Name: "special-7", Value: "a,", Raw: `special-7=a,` }],
+    ),
+    make(
+      new Headers({ "Set-Cookie": `special-8=","` }),
+      [{ Name: "special-8", Value: ",", Raw: `special-8=","` }],
+    ),
+    // TODO(bradfitz): users have reported seeing this in the
+    // wild, but do browsers handle it? RFC 6265 just says "don't
+    // do that" (section 3) and then never mentions header folding
+    // again.
+    // Header{"Set-Cookie": {"ASP.NET_SessionId=foo; path=/; HttpOnly, .ASPXAUTH=7E3AA; expires=Wed, 07-Mar-2012 14:25:06 GMT; path=/; HttpOnly"}},
+  ];
+  for (const tt of tests) {
+    for (let n = 0; n < 2; n++) { // to verify readSetCookies doesn't mutate its input
+      const c = readSetCookies(tt.header)!;
+
+      assertCookiesEqual(c, tt.cookies);
+    }
+  }
+});
+Deno.test("ReadCookies", () => {
+  function make(header: Headers, filter: string, cookies: Array<CookieInit>) {
+    return {
+      header: header,
+      filter: filter,
+      cookies: cookies.map(initCookie),
+    };
+  }
+  const tests = [
+    make(
+      new Headers({ "Cookie": "Cookie-1=v$1;c2=v2" }),
+      "",
+      [
+        { Name: "Cookie-1", Value: "v$1" },
+        { Name: "c2", Value: "v2" },
+      ],
+    ),
+    make(
+      new Headers({ "Cookie": "Cookie-1=v$1;c2=v2" }),
+      "c2",
+      [
+        { Name: "c2", Value: "v2" },
+      ],
+    ),
+    make(
+      new Headers({ "Cookie": "Cookie-1=v$1; c2=v2" }),
+      "",
+      [
+        { Name: "Cookie-1", Value: "v$1" },
+        { Name: "c2", Value: "v2" },
+      ],
+    ),
+    make(
+      new Headers({ "Cookie": "Cookie-1=v$1; c2=v2" }),
+      "c2",
+      [
+        { Name: "c2", Value: "v2" },
+      ],
+    ),
+    make(
+      new Headers({ "Cookie": `Cookie-1="v$1"; c2="v2"` }),
+      "",
+      [
+        { Name: "Cookie-1", Value: "v$1" },
+        { Name: "c2", Value: "v2" },
+      ],
+    ),
+    make(
+      new Headers({ "Cookie": `Cookie-1="v$1"; c2=v2;` }),
+      "",
+      [
+        { Name: "Cookie-1", Value: "v$1" },
+        { Name: "c2", Value: "v2" },
+      ],
+    ),
+    make(
+      new Headers({ "Cookie": `` }),
+      "",
+      [],
+    ),
+  ];
+  for (const tt of tests) {
+    for (let n = 0; n < 2; n++) { // to verify readSetCookies doesn't mutate its input
+      const c = readCookies(tt.header, tt.filter) ?? [];
+
+      assertCookiesEqual(c, tt.cookies);
+    }
+  }
+});
+Deno.test("SetCookieDoubleQuotes", () => {
+  const h = new Headers();
+  h.append("Set-Cookie", `quoted0=none; max-age=30`);
+  h.append("Set-Cookie", `quoted1="cookieValue"; max-age=31`);
+  h.append("Set-Cookie", `quoted2=cookieAV; max-age="32"`);
+  h.append("Set-Cookie", `quoted3="both"; max-age="33"`);
+  const got = readSetCookies(h)!;
+  const want = [
+    initCookie({ Name: "quoted0", Value: "none", MaxAge: 30 }),
+    initCookie({ Name: "quoted1", Value: "cookieValue", MaxAge: 31 }),
+    initCookie({ Name: "quoted2", Value: "cookieAV" }),
+    initCookie({ Name: "quoted3", Value: "both" }),
+  ];
+  assertEquals(got.length, want.length);
+  for (let i = 0; i < got.length; i++) {
+    const g = got[i];
+    const w = want[i];
+    assertEquals(g.name, w.name);
+    assertEquals(g.value, w.value);
+    assertEquals(g.maxAge, w.maxAge);
+  }
+});
+Deno.test("CookieSanitizeValue", () => {
+  function make(i: string, want: string) {
+    return {
+      in: i,
+      want: want,
+    };
+  }
+  const tests = [
+    make("foo", "foo"),
+    make("foo;bar", "foobar"),
+    make("foo\\bar", "foobar"),
+    make('foo"bar', "foobar"),
+    make("\x00\x7e\x7f\x80", "\x7e"),
+    make(`"withquotes"`, "withquotes"),
+    make("a z", `"a z"`),
+    make(" z", `" z"`),
+    make("a ", `"a "`),
+    make("a,z", `"a,z"`),
+    make(",z", `",z"`),
+    make("a,", `"a,"`),
+  ];
+  for (const tt of tests) {
+    assertEquals(sanitizeCookieValue(tt.in), tt.want);
+  }
+});
+Deno.test("CookieSanitizePath", () => {
+  function make(i: string, want: string) {
+    return {
+      in: i,
+      want: want,
+    };
+  }
+  const tests = [
+    make("/path", "/path"),
+    make("/path with space/", "/path with space/"),
+    make("/just;no;semicolon\x00orstuff/", "/justnosemicolonorstuff/"),
+  ];
+  for (const tt of tests) {
+    assertEquals(sanitizeCookiePath(tt.in), tt.want);
   }
 });

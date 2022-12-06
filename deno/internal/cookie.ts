@@ -1,14 +1,15 @@
 import { isTokenRune } from "./httpguts.ts";
-import { DateTime } from "../../deps/luxon/luxon.js";
 import { IP } from "../../deps/easyts/net/ip.ts";
 import * as textproto from "./textproto.ts";
 import * as ascii from "./ascii.ts";
+import { fromHTTP, toHTTP } from "./datetime.ts";
 export enum SameSite {
   DefaultMode = 1,
   LaxMode,
   StrictMode,
   NoneMode,
 }
+
 /**
  * A Cookie represents an HTTP cookie as sent in the Set-Cookie header of an
  */
@@ -69,7 +70,7 @@ export function cookieString(c: Cookie): string {
     }
   }
   if (validCookieExpires(c.expires)) {
-    b.push(`; Expires=${DateTime.fromJSDate(c.expires!).toHTTP()}`);
+    b.push(`; Expires=${toHTTP(c.expires!)}`);
   }
   if (Number.isSafeInteger(c.maxAge)) {
     if (c.maxAge! > 0) {
@@ -172,14 +173,14 @@ function validCookieExpires(t?: Date): boolean {
 }
 // path-av           = "Path=" path-value
 // path-value        = <any CHAR except CTLs or ";">
-function sanitizeCookiePath(v: string): string {
+export function sanitizeCookiePath(v: string): string {
   return sanitizeOrWarn("Cookie.Path", validCookiePathByte, v);
 }
 function validCookiePathByte(b: string): boolean {
   const v = b.charCodeAt(0);
   return 0x20 <= v && v < 0x7f && b != ";";
 }
-function sanitizeCookieValue(v: string): string {
+export function sanitizeCookieValue(v: string): string {
   v = sanitizeOrWarn("Cookie.Value", validCookieValueByte, v);
   if (v.length == 0) {
     return v;
@@ -216,9 +217,8 @@ function sanitizeOrWarn(
   const buf = new Array<string>();
   for (const c of v) {
     if (valid(c)) {
-      continue;
+      buf.push(c);
     }
-    buf.push(c);
   }
   return buf.join("");
 }
@@ -360,11 +360,11 @@ export function readSetCookies(h: Headers): Array<Cookie> | undefined {
         case "expires":
           {
             c.rawExpires = val;
-            const exptime = DateTime.fromHTTP(val);
-            if (!exptime.isValid) {
+            const exptime = fromHTTP(val);
+            if (!exptime) {
               break;
             }
-            c.expires = exptime.toJSDate();
+            c.expires = exptime;
           }
           continue;
         case "path":
