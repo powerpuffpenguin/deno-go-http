@@ -452,25 +452,27 @@ export class Client {
     try {
       const opts = this.opts;
       const jar = opts?.jar;
-
+      const f = opts?.fetch;
       if (jar) {
         // add cookie to request
         const cookies = await jar.cookies(ctx, url);
         if (cookies) {
           addCookies(req.headers, ...cookies);
         }
-      }
-      const f = opts?.fetch;
-      const resp = await (f ? f(ctx, req) : fetch(req));
 
-      if (jar) {
+        const resp = await (f ? f(ctx, req) : fetch(req));
+
         // update set-cookies to jar
-        const cookies = readSetCookies(resp.headers);
-        if (cookies && cookies.length > 0) {
-          await jar.setCookies(ctx, url, ...cookies);
+        const sets = readSetCookies(resp.headers);
+        if (sets) {
+          await jar.setCookies(ctx, url, ...sets);
         }
+
+        c.write(resp);
+      } else {
+        const resp = await (f ? f(ctx, req) : fetch(req));
+        c.write(resp);
       }
-      c.write(resp);
     } catch (e) {
       c.write(e);
     }
