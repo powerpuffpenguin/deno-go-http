@@ -1,11 +1,7 @@
-import { Record, Target } from "./types.ts";
+import { Metadata, Record, Target } from "./types.ts";
 import { readFull } from "../../deps/easyts/io/io.ts";
-import { Once } from "../../deps/easyts/sync/once.ts";
+import { Defer } from "../../deps/easyts/defer.ts";
 
-interface Metadata {
-  mtime?: Date;
-  len: number;
-}
 async function readMetdata(name: string, r: Deno.FsFile, output?: {
   len?: number;
 }): Promise<Metadata> {
@@ -19,7 +15,7 @@ async function readMetdata(name: string, r: Deno.FsFile, output?: {
   await readFull(r, b);
   const text = new TextDecoder().decode(b);
   const md = JSON.parse(text);
-  const mt = md["mt"];
+  const mt = md["mtime"];
   if (!Number.isSafeInteger(mt)) {
     throw new Error(`unknow medatata of ${name}: ${text}`);
   }
@@ -32,11 +28,36 @@ async function readMetdata(name: string, r: Deno.FsFile, output?: {
     mtime: mt > 0 ? new Date(mt) : undefined,
   };
 }
+function copyToDst(dst: string, r: Deno.FsFile, mtime?: Date) {
+  return Defer.async(async (d) => {
+    const rc = d.defer(() => r.close());
+
+    const path = dst + ".ok";
+    const ok = await Deno.open(path, {
+      write: true,
+      truncate: true,
+      create: true,
+      mode: 0o664,
+    });
+    const okc = d.defer(() => ok.close());
+    rc.cancel();
+    await r.readable.pipeTo(ok.writable, {
+      preventClose: true,
+    });
+
+    okc.cancel();
+    ok.close();
+    if (mtime) {
+      await Deno.utime(path, 0, mtime);
+    }
+    await Deno.rename(path, dst);
+  });
+}
 class TemporaryFile {
   constructor(
     public readonly path: string,
-    public readonly mtime: Date | undefined,
     public readonly len: number,
+    public readonly mtime?: Date,
   ) {
   }
   async write(body: ReadableStream<Uint8Array>) {
@@ -65,15 +86,16 @@ class TemporaryFile {
     }
   }
   async dst(dst: string) {
-    const r: Deno.FsFile = await Deno.open(this.path);
-    const once = new Once();
+    let r: Deno.FsFile | undefined = await Deno.open(this.path);
     try {
       const md = await readMetdata(this.path, r);
-      await copyToDst(dst, r, md.mtime);
-      once.do(() => r.close());
+      const src = r;
+      r = undefined;
+      await copyToDst(dst, src, md.mtime);
+
       await Deno.remove(this.path);
     } finally {
-      once.do(() => r.close());
+      r?.close();
     }
   }
 }
@@ -115,6 +137,12 @@ export class LocalFile implements Target {
   ): Promise<void> {
     const path = this.path;
     const temp = `${path}.denodwonload`;
+    const f = new TemporaryFile(temp, len, mtime);
+
+    // write to temp
+    await f.write(body);
+    // write to target
+    await f.dst(this.path);
   }
 }
 export class LocalRecord implements Record {
@@ -158,5 +186,11 @@ export class LocalRecord implements Record {
     }
     this.clsoed_ = true;
     await this.f.close();
+  }
+  metadate(): Metadata {
+    return this.md;
+  }
+  async size(): Promise<number> {
+    return (await this.f.seek(0, Deno.SeekMode.End)) - this.header;
   }
 }

@@ -52,12 +52,14 @@ deps(
     "https://deno.land/x/easyts@0.1.0",
     [
       "channel.ts",
+      "defer.ts",
       "exception.ts",
       "context/context.ts",
       "net/ip.ts",
       "log/mod.ts",
       "sync/once.ts",
       "io/io.ts",
+      "path/path.ts",
     ],
   ),
   define(

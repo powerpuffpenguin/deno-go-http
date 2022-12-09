@@ -38,5 +38,18 @@ export interface Record {
   /**
    * close record
    */
-  close(): Promise<void>;
+  close(): Promise<void> | void;
+  /**
+   * back to download history
+   */
+  metadate(): Promise<Metadata> | Metadata;
+
+  /**
+   * The number of bytes downloaded
+   */
+  size(): Promise<number> | number;
+}
+export interface Metadata {
+  len: number;
+  mtime: Date | undefined;
 }
