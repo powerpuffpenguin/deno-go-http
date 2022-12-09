@@ -9,6 +9,8 @@ import { Method } from "./method.ts";
 import { addCookies, readSetCookies } from "./cookie.ts";
 import { CookieJar } from "./cookiejar.ts";
 import { MimeForm } from "./mime.ts";
+import { Downloader } from "./internal/downloader/downloader.ts";
+import { LocalFile } from "./internal/downloader/localsystem.ts";
 export type LikeURLSearchParams =
   | string[][]
   | Record<string, string>
@@ -120,10 +122,10 @@ export class Client {
   url(url: string | URL): URL {
     return new URL(url, this.opts?.baseURL);
   }
-  do(req: string | URL | Request, init?: RequestInit): Promise<Response>;
+  do(req: string | URL, init?: RequestInit): Promise<Response>;
   do(
     ctx: Context,
-    req: string | URL | Request,
+    req: string | URL,
     init?: RequestInit,
   ): Promise<Response>;
   do(...args: Array<any>): Promise<Response> {
@@ -476,5 +478,44 @@ export class Client {
     } catch (e) {
       c.write(e);
     }
+  }
+  downloadFile(
+    path: string,
+    url: string | URL,
+  ): Promise<void>;
+  downloadFile(
+    ctx: Context,
+    path: string,
+    url: string | URL,
+  ): Promise<void>;
+  downloadFile(...args: Array<any>): Promise<void> {
+    // parse arguments
+    let ctx: Context, path: string, u: string | URL | Request;
+    const arg = args[0];
+    if (typeof arg === "string") {
+      ctx = background();
+      path = arg;
+      u = args[1];
+    } else {
+      ctx = arg;
+      path = args[1];
+      u = args[2];
+    }
+    let url: URL;
+    if (typeof u === "string") {
+      url = new URL(u, this.opts?.baseURL);
+    } else if (u instanceof URL) {
+      url = u;
+    } else {
+      url = new URL(u.url);
+    }
+
+    // serve
+    return new Downloader({
+      client: this,
+      ctx: ctx,
+      url: url,
+      target: new LocalFile(path),
+    }).serve();
   }
 }

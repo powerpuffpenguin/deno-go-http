@@ -56,6 +56,8 @@ deps(
       "context/context.ts",
       "net/ip.ts",
       "log/mod.ts",
+      "sync/once.ts",
+      "io/io.ts",
     ],
   ),
   define(
