@@ -1,6 +1,10 @@
 // deno-lint-ignore-file no-explicit-any
-import { background, CancelContext, Context } from "./deps/easyts/context.ts";
-import { Chan, selectChan } from "./deps/easyts/core/channel.ts";
+import {
+  background,
+  CancelContext,
+  Context,
+} from "./deps/easyts/context/context.ts";
+import { Chan, selectChan } from "./deps/easyts/channel.ts";
 import { Method } from "./method.ts";
 import { addCookies, readSetCookies } from "./cookie.ts";
 import { CookieJar } from "./cookiejar.ts";
@@ -344,7 +348,6 @@ export class Client {
     } else if (ctx0?.isClosed) {
       throw ctx0.err;
     }
-
     const ctx = this._context(ctx0);
     let signalChan = Chan.never as Chan<any>;
     let l: any;
@@ -359,11 +362,10 @@ export class Client {
       const signalCase = signalChan.readCase();
       const ctl = new AbortController();
       const doneCase = ctx.done.readCase();
-      const c = new Chan<any>(1);
+      const c = new Chan<Response>(1);
       const respCase = c.readCase();
 
       this._fetch(ctx, c, url, this._make(url, init, ctl.signal, mime));
-
       switch (
         await selectChan(signalCase, doneCase, respCase)
       ) {
@@ -374,7 +376,7 @@ export class Client {
           ctl.abort(ctx.err);
           break;
         case respCase: {
-          const val = respCase.read().value;
+          const val = respCase.read();
           if (val instanceof Response) {
             return val;
           }

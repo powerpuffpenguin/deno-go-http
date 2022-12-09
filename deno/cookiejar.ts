@@ -1,4 +1,4 @@
-import { Context } from "./deps/easyts/context.ts";
+import { Context } from "./deps/easyts/context/context.ts";
 import { Cookie } from "./cookie.ts";
 export interface CookieJar {
   /**

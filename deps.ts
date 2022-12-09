@@ -49,11 +49,11 @@ deps(
   ]),
   define(
     "easyts",
-    "https://raw.githubusercontent.com/powerpuffpenguin/easyts/0.0.20/deno",
+    "https://deno.land/x/easyts@0.1.0",
     [
-      "core/channel.ts",
-      "core/exception.ts",
-      "context.ts",
+      "channel.ts",
+      "exception.ts",
+      "context/context.ts",
       "net/ip.ts",
     ],
   ),
