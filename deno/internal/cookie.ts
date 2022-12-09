@@ -3,6 +3,7 @@ import { IP } from "../deps/easyts/net/ip.ts";
 import * as textproto from "./textproto.ts";
 import * as ascii from "./ascii.ts";
 import { fromHTTP, toHTTP } from "../datetime.ts";
+import { log } from "../log.ts";
 export enum SameSite {
   DefaultMode = 1,
   LaxMode,
@@ -64,7 +65,7 @@ export function cookieString(c: Cookie): string {
       }
       b.push(`; Domain=${d}`);
     } else {
-      console.warn(
+      log.warn(
         `http: invalid Cookie.domain ${domain}; dropping domain attribute`,
       );
     }
@@ -204,7 +205,7 @@ function sanitizeOrWarn(
     if (valid(c)) {
       continue;
     }
-    console.warn(
+    log.warn(
       `http: invalid byte c in ${fieldName}; dropping invalid bytes`,
     );
     ok = false;
@@ -522,14 +523,14 @@ export function readCookie(h: Headers, name: string): Cookie | undefined {
 export function addCookies(h: Headers, ...cookies: Array<Cookie>): void {
   for (const c of cookies) {
     if (c.name == "") {
-      console.warn(
+      log.warn(
         `http: invalid Cookie.name ; not added to header`,
       );
       continue;
     }
     const name = sanitizeCookieName(c.name);
     if (!isCookieNameValid(name)) {
-      console.warn(
+      log.warn(
         `http: invalid Cookie.name ${name} ; not added to header`,
       );
       continue;

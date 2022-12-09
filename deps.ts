@@ -55,6 +55,7 @@ deps(
       "exception.ts",
       "context/context.ts",
       "net/ip.ts",
+      "log/mod.ts",
     ],
   ),
   define(

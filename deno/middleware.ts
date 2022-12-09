@@ -1,4 +1,5 @@
 import { Context } from "./deps/easyts/context/context.ts";
+import { log } from "./log.ts";
 type NextHandle = (ctx: Context, request: Request) => Promise<Response>;
 
 export type Handle = (
@@ -126,14 +127,14 @@ export async function logger(
   const at = Date.now();
   try {
     const resp = await next(ctx, req);
-    console.log(
+    log.info(
       `${req.method} ${req.url} [${
         used(Date.now() - at)
       }] completed: ${resp.status} ${resp.statusText}`,
     );
     return resp;
   } catch (e) {
-    console.log(
+    log.info(
       `${req.method} ${req.url} [${used(Date.now() - at)}] error:`,
       e,
     );
