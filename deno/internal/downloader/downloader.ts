@@ -8,16 +8,12 @@ import {
   PartialContent,
   RequestedRangeNotSatisfiable,
 } from "../../status.ts";
-import { Metadata, DownloadRecord, Target } from "../../download.ts";
+import { DownloadRecord, Metadata, Target } from "../../download.ts";
+import { FetchInit } from "../fetch.ts";
 export interface Client {
-  do(
-    ctx: Context,
+  fetch(
     req: string | URL,
-    init?: RequestInit,
-  ): Promise<Response>;
-  do(
-    req: string | URL,
-    init?: RequestInit,
+    init?: FetchInit,
   ): Promise<Response>;
 }
 
@@ -67,7 +63,7 @@ async function readText(resp: Response) {
   return `${resp.status} ${resp.statusText}`;
 }
 export interface DownloaderOptions {
-  ctx?: Context;
+  context?: Context;
   client: Client;
   url: URL;
   target: Target;
@@ -239,9 +235,10 @@ export class Downloader {
     log.warn(`new ${opts.url} error: ${text}`);
     throw new Error(text);
   }
-  private do(req: string | URL, init: RequestInit) {
+  private do(req: string | URL, init: FetchInit) {
     const opts = this.opts;
+    init.context = opts.context;
     const client = opts.client;
-    return opts.ctx ? client.do(req, init) : client.do(req, init);
+    return client.fetch(req, init);
   }
 }

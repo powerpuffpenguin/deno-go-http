@@ -335,16 +335,16 @@ export class Jar implements CookieJar {
 export function createJar(jar: Jar) {
   return async (
     ctx: Context,
+    url: URL,
     req: Request,
     next: NextHandle,
   ) => {
-    const url = new URL(req.url);
     // add cookie to request
     const cookies = await jar.cookies(ctx, url);
     if (cookies) {
       addCookies(req.headers, ...cookies);
     }
-    const resp = await next(ctx, req);
+    const resp = await next(ctx, url, req);
 
     // update set-cookies to jar
     const sets = readSetCookies(resp.headers);

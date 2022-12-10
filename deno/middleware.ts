@@ -1,17 +1,24 @@
 import { Context } from "./deps/easyts/context/context.ts";
 import { log } from "./log.ts";
-export type NextHandle = (ctx: Context, request: Request) => Promise<Response>;
+import { _ } from "./status.ts";
+export type NextHandle = (
+  ctx: Context,
+  url: URL,
+  req: Request,
+) => Promise<Response>;
 
 export type Handle = (
   ctx: Context,
-  request: Request,
+  url: URL,
+  req: Request,
   next: NextHandle,
 ) => Promise<Response>;
 
 export interface Middleware {
   fetch(
     ctx: Context,
-    request: Request,
+    url: URL,
+    req: Request,
     next: NextHandle,
   ): Promise<Response>;
 }
@@ -21,29 +28,29 @@ class _Element {
     public readonly handle: Handle | Middleware,
   ) {}
 
-  fetch(ctx: Context, request: Request): Promise<Response> {
+  fetch(ctx: Context, url: URL, req: Request): Promise<Response> {
     const h = this.handle;
     const next = this.next;
 
     const f = next === undefined
-      ? (_: Context, req: Request) => fetch(req)
-      : (ctx: Context, req: Request) => next.fetch(ctx, req);
+      ? (_: Context, __: URL, req: Request) => fetch(req)
+      : (ctx: Context, url: URL, req: Request) => next.fetch(ctx, url, req);
 
     return typeof h === "function"
-      ? h(ctx, request, f)
-      : h.fetch(ctx, request, f);
+      ? h(ctx, url, req, f)
+      : h.fetch(ctx, url, req, f);
   }
 }
 /**
  * Similar to the createMiddleware function, but also replaces the underlying fetch function with a function f
  */
 export function createMiddlewareWithFetch(
-  f: (req: Request) => Promise<Response>,
+  f: (ctx: Context, url: URL, req: Request) => Promise<Response>,
   ...middleware: Array<Handle | Middleware>
 ): NextHandle {
-  return ((ctx, request) => {
+  return ((ctx, url, request) => {
     if (middleware.length == 0) {
-      return f(request);
+      return f(ctx, url, request);
     }
     let root: _Element | undefined;
     let pre: _Element | undefined;
@@ -56,7 +63,7 @@ export function createMiddlewareWithFetch(
       }
       pre = c;
     }
-    return root!.fetch(ctx, request);
+    return root!.fetch(ctx, url, request);
   });
 }
 /**
@@ -68,7 +75,7 @@ export function createMiddlewareWithFetch(
 export function createMiddleware(
   ...middleware: Array<Handle | Middleware>
 ): NextHandle {
-  return createMiddlewareWithFetch(fetch, ...middleware);
+  return createMiddlewareWithFetch((_, __, req) => fetch(req), ...middleware);
 }
 const Millisecond = 1;
 const Second = Millisecond * 1000;
@@ -121,12 +128,13 @@ function used(v: number): string {
  */
 export async function logger(
   ctx: Context,
+  url: URL,
   req: Request,
   next: NextHandle,
 ): Promise<Response> {
   const at = Date.now();
   try {
-    const resp = await next(ctx, req);
+    const resp = await next(ctx, url, req);
     log.info(
       `${req.method} ${req.url} [${
         used(Date.now() - at)
@@ -146,11 +154,11 @@ export async function logger(
  * Create a middleware that will delay all requests for a period of time before sending them out
  */
 export function createDelay(ms: number): Handle {
-  return (async (ctx, req, next) => {
+  return (async (ctx, url, req, next) => {
     await ctx.sleep(ms);
     if (ctx.isClosed) {
       throw ctx.err;
     }
-    return next(ctx, req);
+    return next(ctx, url, req);
   });
 }
