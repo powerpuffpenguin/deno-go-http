@@ -8,17 +8,21 @@ import {
   PartialContent,
   RequestedRangeNotSatisfiable,
 } from "../../status.ts";
-import { Metadata, Record, Target } from "../../download.ts";
+import { Metadata, DownloadRecord, Target } from "../../download.ts";
 export interface Client {
   do(
     ctx: Context,
     req: string | URL,
     init?: RequestInit,
   ): Promise<Response>;
+  do(
+    req: string | URL,
+    init?: RequestInit,
+  ): Promise<Response>;
 }
 
-class SafeRecord implements Record {
-  constructor(public native: Record) {}
+class SafeRecord implements DownloadRecord {
+  constructor(public native: DownloadRecord) {}
   private closed_ = false;
   async close(): Promise<void> {
     if (this.closed_) {
@@ -63,7 +67,7 @@ async function readText(resp: Response) {
   return `${resp.status} ${resp.statusText}`;
 }
 export interface DownloaderOptions {
-  ctx: Context;
+  ctx?: Context;
   client: Client;
   url: URL;
   target: Target;
@@ -117,7 +121,7 @@ export class Downloader {
   private async _new(resp?: Response) {
     const opts = this.opts;
     if (!resp) {
-      resp = await opts.client.do(opts.ctx, opts.url, {
+      resp = await this.do(opts.url, {
         method: Method.Get,
       });
     }
@@ -148,7 +152,7 @@ export class Downloader {
   }
   private async _refash(mt: string) {
     const opts = this.opts;
-    const resp = await opts.client.do(opts.ctx, opts.url, {
+    const resp = await this.do(opts.url, {
       method: Method.Get,
       headers: {
         "If-Modified-Since": mt,
@@ -167,7 +171,7 @@ export class Downloader {
     log.warn(`new ${opts.url} error: ${text}`);
     throw new Error(text);
   }
-  private async _recover(record: Record, md: Metadata) {
+  private async _recover(record: DownloadRecord, md: Metadata) {
     const opts = this.opts;
     const begin = await record.size();
     if (md.len > 0) {
@@ -189,7 +193,7 @@ export class Downloader {
     log.debug(
       `recover range(${begin},${md.len}) '${m}': ${opts.target}`,
     );
-    const resp = await opts.client.do(opts.ctx, opts.url, {
+    const resp = await this.do(opts.url, {
       method: Method.Get,
       headers: {
         "If-Range": m,
@@ -214,9 +218,9 @@ export class Downloader {
     log.warn(`new ${opts.url} error: ${text}`);
     throw new Error(text);
   }
-  private async recoverRefash(record: Record, mt: string) {
+  private async recoverRefash(record: DownloadRecord, mt: string) {
     const opts = this.opts;
-    const resp = await opts.client.do(opts.ctx, opts.url, {
+    const resp = await this.do(opts.url, {
       method: Method.Get,
       headers: {
         "If-Modified-Since": mt,
@@ -234,5 +238,10 @@ export class Downloader {
     const text = await readText(resp);
     log.warn(`new ${opts.url} error: ${text}`);
     throw new Error(text);
+  }
+  private do(req: string | URL, init: RequestInit) {
+    const opts = this.opts;
+    const client = opts.client;
+    return opts.ctx ? client.do(req, init) : client.do(req, init);
   }
 }

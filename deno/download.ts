@@ -9,7 +9,7 @@ export interface Target {
   /**
    * Returns the archive download record or undefined if there is no record
    */
-  record(): Promise<Record | undefined>;
+  record(): Promise<DownloadRecord | undefined>;
 
   /**
    * alternative target file
@@ -24,7 +24,7 @@ export interface Target {
 /**
  * File Download History
  */
-export interface Record {
+export interface DownloadRecord {
   /**
    * close record
    */

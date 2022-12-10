@@ -1,5 +1,6 @@
 import { Client } from "../deno/client.ts";
 import { cookieString, readSetCookies } from "../deno/cookie.ts";
+import { background } from "../deno/deps/easyts/context/context.ts";
 
 import { Jar } from "../deno/jar.ts";
 import { createDelay, createMiddleware, logger } from "../deno/middleware.ts";
@@ -17,36 +18,39 @@ async function basic(baseURL: string) {
 
   console.log("--------- get ---------");
 
-  let resp = await client.get(`echo?id=2&val=3`, { // Optional Search Params, If set overrides the value in the url parameter
+  let resp = await client.get(`echo?id=2&val=3`, undefined, {
     id: "1",
     name: "kate",
   });
   let body = await resp.text();
   console.log(`${resp.status} ${resp.statusText}
-${body}`);
+  ${body}`);
 
   console.log("--------- post form ---------");
-  const search = new URLSearchParams({
-    id: "1",
-    name: "kate",
+  resp = await client.post(`echo?id=1`, {
+    body: new URLSearchParams({
+      id: "1",
+      name: "kate",
+    }),
   });
-  resp = await client.post(`echo?id=1`, search);
   body = await resp.text();
   console.log(`${resp.status} ${resp.statusText}
-${body}`);
+    ${body}`);
 
   console.log("--------- post json ---------");
   resp = await client.post(
     `echo`,
-    JSON.stringify({
-      id: "1",
-      name: "kate",
-    }),
+    {
+      body: JSON.stringify({
+        id: "1",
+        name: "kate",
+      }),
+    },
     MimeJSON,
   );
   body = await resp.text();
   console.log(`${resp.status} ${resp.statusText}
-${body}`);
+  ${body}`);
 
   console.log("--------- cookie ---------");
   for (let i = 0; i < 5; i++) {
@@ -54,8 +58,8 @@ ${body}`);
     const body = await resp.text();
     const cookies = readSetCookies(resp.headers)?.map((v) => cookieString(v));
     console.log(`body: ${body}
-cookies: ${cookies}
-`);
+  cookies: ${cookies}
+  `);
   }
 }
 async function middleware(baseURL: string) {
@@ -92,6 +96,13 @@ async function middleware(baseURL: string) {
       deverr: "1",
     },
   });
+
+  const ctx = background().withTimeout(1000);
+  try {
+    await client.get(ctx, "http://192.168.0.222");
+  } catch (e) {
+    console.log(e?.message);
+  }
 }
 
 // run a server for demo

@@ -1,18 +1,19 @@
 // deno-lint-ignore-file no-explicit-any
-import {
-  background,
-  CancelContext,
-  Context,
-} from "./deps/easyts/context/context.ts";
-import { Chan, selectChan } from "./deps/easyts/channel.ts";
+import { Context } from "./deps/easyts/context/context.ts";
 import { Method } from "./method.ts";
 import { addCookies, readSetCookies } from "./cookie.ts";
 import { CookieJar } from "./cookiejar.ts";
 import { MimeForm } from "./mime.ts";
+
+import { Metadata, DownloadRecord,Target } from "./download.ts";
+import { ContextListener } from "./internal/context.ts";
+import { Chan, selectChan } from "./deps/easyts/channel.ts";
 import { Downloader } from "./internal/downloader/downloader.ts";
-import { LocalFile } from "./internal/downloader/localsystem.ts";
-import { Target } from "./download.ts";
-export type LikeURLSearchParams =
+
+import { readFull } from "./deps/easyts/io/io.ts";
+import { Defer } from "./deps/easyts/defer.ts";
+
+export type URLSearchParamsInit =
   | string[][]
   | Record<string, string>
   | string
@@ -101,6 +102,12 @@ export interface ClientOptions {
     request: Request,
   ) => Promise<Response>;
 }
+export interface DownloadOptions {
+  ctx?: Context;
+  url: URL | string;
+  target: Target;
+}
+
 export class Client {
   public readonly opts: ClientOptions | undefined;
   constructor();
@@ -117,258 +124,276 @@ export class Client {
       }
     }
   }
-  context(): Context {
-    return this.opts?.ctx ?? background();
+
+  private async _send(args: Array<any>, method?: Method) {
+    const l = new ContextListener();
+    try {
+      const req =
+        this._parse(l, undefined, args[0], args[1], args[2], method) ??
+          this._parse(l, args[0], args[1], args[2], args[3], method)!;
+      return await this._do(l, req);
+    } finally {
+      l.ctx.cancel();
+    }
   }
-  url(url: string | URL): URL {
-    return new URL(url, this.opts?.baseURL);
-  }
-  do(req: string | URL, init?: RequestInit): Promise<Response>;
-  do(
-    ctx: Context,
-    req: string | URL,
-    init?: RequestInit,
-  ): Promise<Response>;
-  do(...args: Array<any>): Promise<Response> {
-    let arg = args[0];
-    let ctx: Context | undefined;
-    let url: URL;
-    let init: RequestInit | undefined;
-    if (typeof arg === "string" || arg instanceof URL) {
-      url = new URL(arg, this.opts?.baseURL);
-      init = args[1];
-    } else if (arg instanceof Request) {
-      url = new URL(arg.url);
-      init = args[1];
+  private _headers(
+    init: HeadersInit | undefined,
+    def: HeadersInit | undefined,
+  ): Headers | undefined {
+    let h: undefined | Headers;
+    if (init === undefined) {
+      if (def !== undefined) {
+        h = new Headers(def);
+      }
     } else {
-      ctx = arg as Context;
-      arg = args[1];
-      if (typeof arg === "string" || arg instanceof URL) {
-        url = new URL(arg, this.opts?.baseURL);
-        init = args[2];
-      } else {
-        //Request
-        url = new URL(arg.url);
-        init = args[2];
+      h = new Headers(init);
+      if (def !== undefined) {
+        const s = new Headers(def);
+        for (const [k, v] of s) {
+          if (!h.has(k)) {
+            h.set(k, v);
+          }
+        }
       }
     }
-    return this._do(ctx, url, init);
+    return h;
   }
-
-  private _nobody(
-    method: string,
-    cu: Context | LikeURL,
-    us?: LikeURL | LikeURLSearchParams,
-    params?: LikeURLSearchParams,
-  ): Promise<Response> {
-    let ctx: Context | undefined;
-    let u: LikeURL;
-    if (typeof cu === "string" || cu instanceof URL) {
-      u = cu as LikeURL;
-      params = us as LikeURLSearchParams;
-    } else {
-      ctx = cu;
-      u = us as LikeURL;
-    }
-    const url = new URL(u, this.opts?.baseURL);
-    if (params) {
-      const s = new URLSearchParams(params);
-      url.search = s.toString();
-    }
-    return this._do(
-      ctx,
-      url,
-      {
-        method: method,
-      },
-    );
-  }
-  get(
-    url: LikeURL,
-    search?: LikeURLSearchParams,
-  ): Promise<Response>;
-  get(
-    ctx: Context,
-    url: LikeURL,
-    search?: LikeURLSearchParams,
-  ): Promise<Response>;
-  get(
-    cu: Context | LikeURL,
-    up?: LikeURL | LikeURLSearchParams,
-    params?: LikeURLSearchParams,
-  ): Promise<Response> {
-    return this._nobody(Method.Get, cu, up, params);
-  }
-  head(url: string | URL, search?: LikeURLSearchParams): Promise<Response>;
-  head(
-    ctx: Context,
-    url: string | URL,
-    search?: LikeURLSearchParams,
-  ): Promise<Response>;
-  head(
-    cu: Context | LikeURL,
-    up?: LikeURL | LikeURLSearchParams,
-    params?: LikeURLSearchParams,
-  ): Promise<Response> {
-    return this._nobody(Method.Head, cu, up, params);
-  }
-  delete(url: string | URL, search?: LikeURLSearchParams): Promise<Response>;
-  delete(
-    ctx: Context,
-    url: string | URL,
-    search?: LikeURLSearchParams,
-  ): Promise<Response>;
-  delete(
-    cu: Context | LikeURL,
-    up?: LikeURL | LikeURLSearchParams,
-    params?: LikeURLSearchParams,
-  ): Promise<Response> {
-    return this._nobody(Method.Delete, cu, up, params);
-  }
-  private _body(
-    method: string,
-    cu: Context | LikeURL,
-    ub?: LikeURL | LikeBodyInit | string,
-    bc?: LikeBodyInit | string,
-    c?: string,
-  ) {
-    let ctx: Context | undefined;
-    let u: LikeURL;
-    let b: LikeBodyInit | undefined;
-    if (typeof cu === "string" || cu instanceof URL) {
-      u = cu as LikeURL;
-      b = ub as LikeBodyInit;
-      c = bc as string;
-    } else {
-      ctx = cu;
-      u = ub as LikeURL;
-      b = bc;
-    }
-
-    return this._do(
-      ctx,
-      new URL(u, this.opts?.baseURL),
-      {
-        method: method,
-        body: b,
-      },
-      c,
-    );
-  }
-  post(
-    url: LikeURL,
-    body?: LikeBodyInit | string,
-    contextType?: string,
-  ): Promise<Response>;
-  post(
-    ctx: Context,
-    url: LikeURL,
-    body?: LikeBodyInit | string,
-    contextType?: string,
-  ): Promise<Response>;
-  post(
-    cu: Context | LikeURL,
-    ub?: LikeURL | LikeBodyInit | string,
-    bc?: LikeBodyInit | string,
-    c?: string,
-  ): Promise<Response> {
-    return this._body(Method.Post, cu, ub, bc, c);
-  }
-  put(
-    url: LikeURL,
-    body?: LikeBodyInit | string,
-    contextType?: string,
-  ): Promise<Response>;
-  put(
-    ctx: Context,
-    url: LikeURL,
-    body?: LikeBodyInit | string,
-    contextType?: string,
-  ): Promise<Response>;
-  put(
-    cu: Context | LikeURL,
-    ub?: LikeURL | LikeBodyInit | string,
-    bc?: LikeBodyInit | string,
-    c?: string,
-  ): Promise<Response> {
-    return this._body(Method.Put, cu, ub, bc, c);
-  }
-  patch(
-    url: LikeURL,
-    body?: LikeBodyInit | string,
-    contextType?: string,
-  ): Promise<Response>;
-  patch(
-    ctx: Context,
-    url: LikeURL,
-    body?: LikeBodyInit | string,
-    contextType?: string,
-  ): Promise<Response>;
-  patch(
-    cu: Context | LikeURL,
-    ub?: LikeURL | LikeBodyInit | string,
-    bc?: LikeBodyInit | string,
-    c?: string,
-  ): Promise<Response> {
-    return this._body(Method.Patch, cu, ub, bc, c);
-  }
-
-  private _context(ctx0: Context | undefined): CancelContext {
-    const parent = this.opts?.ctx;
-    if (!ctx0) {
-      ctx0 = parent ?? background();
-      return ctx0.withCancel();
-    } else if (!parent) {
-      return ctx0.withCancel();
-    }
-    const ctx = background().withCancel();
-    (async () => {
-      const caseCtx = ctx.done.readCase();
-      const caseParent = parent.done.readCase();
-      const case0 = ctx0.done.readCase();
-      switch (await selectChan(caseCtx, caseParent, case0)) {
-        case case0:
-          ctx.cancel(ctx0.err);
-          return;
-        case caseParent:
-          ctx.cancel(parent.err);
-          return;
-          // case caseCtx: return;
-      }
-    })();
-    return ctx;
-  }
-  private async _do(
-    ctx0: Context | undefined,
+  private _url(
+    l: ContextListener,
+    c1: Context | undefined,
     url: URL,
     init?: RequestInit,
-    mime?: string,
-  ): Promise<Response> {
-    const signal = init?.signal ?? this.opts?.init?.signal;
+    method?: Method,
+  ): Request {
+    const opts = this.opts;
+    l.add(opts?.ctx, c1);
+    l.signal(init?.signal);
+    const def = opts?.init;
 
-    if (signal && signal.aborted) {
-      throw signal.reason;
-    } else if (ctx0?.isClosed) {
-      throw ctx0.err;
+    const o = new Request(url, {
+      body: init?.body,
+      cache: init?.cache ?? def?.cache,
+      credentials: init?.credentials ?? def?.credentials,
+      headers: this._headers(init?.headers, def?.headers),
+      integrity: init?.integrity ?? def?.integrity,
+      keepalive: init?.keepalive ?? def?.keepalive,
+      method: method ?? init?.method ?? def?.method,
+      mode: init?.mode ?? def?.mode,
+      redirect: init?.redirect ?? def?.redirect,
+      referrer: init?.referrer ?? def?.referrer,
+      referrerPolicy: init?.referrerPolicy ?? def?.referrerPolicy,
+      signal: l.abort.signal,
+    });
+    return o;
+  }
+  private _request(
+    l: ContextListener,
+    c1: Context | undefined,
+    req: Request,
+    init?: RequestInit,
+    method?: Method,
+  ): Request {
+    const opts = this.opts;
+    l.add(opts?.ctx, c1);
+    l.signal(init?.signal);
+    const def = opts?.init;
+    const h = req.headers.values.length == 0 ? undefined : req.headers;
+    const o = new Request(req, {
+      body: init?.body,
+      cache: init?.cache ?? def?.cache,
+      credentials: init?.credentials ?? def?.credentials,
+      headers: this._headers(
+        init?.headers ?? h,
+        def?.headers,
+      ),
+      integrity: init?.integrity ?? def?.integrity,
+      keepalive: init?.keepalive ?? def?.keepalive,
+      method: method ?? init?.method ?? def?.method,
+      mode: init?.mode ?? def?.mode,
+      redirect: init?.redirect ?? def?.redirect,
+      referrer: init?.referrer ?? def?.referrer,
+      referrerPolicy: init?.referrerPolicy ?? def?.referrerPolicy,
+      signal: l.abort.signal,
+    });
+    return o;
+  }
+  private _method(
+    l: ContextListener,
+    method?: Method,
+    contextType?: string | URLSearchParamsInit,
+  ): URLSearchParamsInit | undefined {
+    switch (method) {
+      case Method.Get:
+      case Method.Head:
+      case Method.Delete:
+        return new URLSearchParams(contextType);
+      case Method.Post:
+      case Method.Put:
+      case Method.Patch:
+        l.mime = contextType as string;
+        break;
     }
-    const ctx = this._context(ctx0);
-    let signalChan = Chan.never as Chan<any>;
-    let l: any;
-    if (signal) {
-      signalChan = new Chan<any>();
-      l = () => {
-        signalChan.close();
-      };
-      signal.addEventListener("abort", l);
+  }
+  private _parse(
+    l: ContextListener,
+    ctx?: Context,
+    req?: string | URL | Request,
+    init?: RequestInit,
+    contextType?: string | URLSearchParamsInit,
+    method?: Method,
+  ): undefined | Request {
+    if (typeof req === "string") {
+      const search = this._method(l, method, contextType);
+      const url = new URL(req, this.opts?.baseURL);
+      if (search) {
+        url.search = search.toString();
+      }
+      return this._url(l, ctx, url, init, method);
+    } else if (req instanceof URL) {
+      const search = this._method(l, method, contextType);
+      const url = new URL(req);
+      if (search) {
+        url.search = search.toString();
+      }
+      return this._url(l, ctx, req, init, method);
+    } else if (req instanceof Request) {
+      const search = this._method(l, method, contextType);
+      if (search) {
+        const url = new URL(req.url);
+        url.search = search.toString();
+        req = new Request(url, req);
+      }
+      return this._request(l, ctx, req, init, method);
     }
+    return;
+  }
+
+  do(req?: string | URL | Request, init?: RequestInit): Promise<Response>;
+  do(
+    ctx: Context,
+    req?: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response>;
+  do(...args: Array<any>) {
+    return this._send(args);
+  }
+  get(
+    req?: string | URL | Request,
+    init?: RequestInit,
+    search?: URLSearchParamsInit,
+  ): Promise<Response>;
+  get(
+    ctx: Context,
+    req?: string | URL | Request,
+    init?: RequestInit,
+    search?: URLSearchParamsInit,
+  ): Promise<Response>;
+  get(...args: Array<any>) {
+    return this._send(args, Method.Get);
+  }
+  head(
+    req?: string | URL | Request,
+    init?: RequestInit,
+    search?: URLSearchParamsInit,
+  ): Promise<Response>;
+  head(
+    ctx: Context,
+    req?: string | URL | Request,
+    init?: RequestInit,
+    search?: URLSearchParamsInit,
+  ): Promise<Response>;
+  head(...args: Array<any>) {
+    return this._send(args, Method.Head);
+  }
+  delete(
+    req?: string | URL | Request,
+    init?: RequestInit,
+    search?: URLSearchParamsInit,
+  ): Promise<Response>;
+  delete(
+    ctx: Context,
+    req?: string | URL | Request,
+    init?: RequestInit,
+    search?: URLSearchParamsInit,
+  ): Promise<Response>;
+  delete(...args: Array<any>) {
+    return this._send(args, Method.Delete);
+  }
+  post(
+    req?: string | URL | Request,
+    init?: RequestInit,
+    contextType?: string,
+  ): Promise<Response>;
+  post(
+    ctx: Context,
+    req?: string | URL | Request,
+    init?: RequestInit,
+    contextType?: string,
+  ): Promise<Response>;
+  post(...args: Array<any>) {
+    return this._send(args, Method.Post);
+  }
+  put(
+    req?: string | URL | Request,
+    init?: RequestInit,
+    contextType?: string,
+  ): Promise<Response>;
+  put(
+    ctx: Context,
+    req?: string | URL | Request,
+    init?: RequestInit,
+    contextType?: string,
+  ): Promise<Response>;
+  put(...args: Array<any>) {
+    return this._send(args, Method.Put);
+  }
+  patch(
+    req?: string | URL | Request,
+    init?: RequestInit,
+    contextType?: string,
+  ): Promise<Response>;
+  patch(
+    ctx: Context,
+    req?: string | URL | Request,
+    init?: RequestInit,
+    contextType?: string,
+  ): Promise<Response>;
+  patch(...args: Array<any>) {
+    return this._send(args, Method.Patch);
+  }
+
+  private async _do(
+    l: ContextListener,
+    req: Request,
+  ): Promise<Response> {
+    if (req.body) {
+      switch (req.method) {
+        case Method.Post:
+        case Method.Put:
+        case Method.Patch:
+          if (!req.headers.has("context-type")) {
+            req.headers.set("context-type", l.mime ?? MimeForm);
+          }
+          break;
+      }
+    }
+    const ctx = l.ctx;
+
+    const signalChan = new Chan<any>();
+    const signal = l.abort.signal;
+    const listener = () => {
+      signalChan.close();
+    };
+    signal.addEventListener("abort", listener);
+
     try {
       const signalCase = signalChan.readCase();
-      const ctl = new AbortController();
+      const ctl = l.abort;
       const doneCase = ctx.done.readCase();
       const c = new Chan<Response>(1);
       const respCase = c.readCase();
 
-      this._fetch(ctx, c, url, this._make(url, init, ctl.signal, mime));
+      this._fetch(ctx, c, req);
       switch (
         await selectChan(signalCase, doneCase, respCase)
       ) {
@@ -391,72 +416,23 @@ export class Client {
       }
       return await this._wait(c);
     } finally {
-      signal?.removeEventListener("abort", l);
-      ctx.cancel();
+      signal?.removeEventListener("abort", listener);
     }
   }
   private async _wait(c: Chan<any>) {
-    const val = (await c.read()).value;
+    const val = await c.read();
     if (val instanceof Response) {
       return val;
     }
     throw val;
   }
-  private _make(
-    url: URL,
-    init: RequestInit | undefined,
-    signal: AbortSignal,
-    mime?: string,
-  ): Request {
-    const def = this.opts?.init;
-    let h: undefined | Headers;
-    if (init?.headers === undefined) {
-      if (def?.headers !== undefined) {
-        h = new Headers(def.headers);
-      }
-    } else {
-      h = new Headers(init.headers);
-      if (def?.headers !== undefined) {
-        const s = new Headers(def.headers);
-        for (const [k, v] of s) {
-          if (!h.has(k)) {
-            h.set(k, v);
-          }
-        }
-      }
-    }
-    const req = new Request(url, {
-      body: init?.body,
-      cache: init?.cache ?? def?.cache,
-      credentials: init?.credentials ?? def?.credentials,
-      headers: h,
-      integrity: init?.integrity ?? def?.integrity,
-      keepalive: init?.keepalive ?? def?.keepalive,
-      method: init?.method ?? def?.method,
-      mode: init?.mode ?? def?.mode,
-      redirect: init?.redirect ?? def?.redirect,
-      referrer: init?.referrer ?? def?.referrer,
-      referrerPolicy: init?.referrerPolicy ?? def?.referrerPolicy,
-      signal: signal,
-    });
-    if (
-      req.body && (
-        req.method == Method.Post || req.method == Method.Put ||
-        req.method == Method.Patch
-      )
-    ) {
-      if (req.headers.get("context-type") === null) {
-        req.headers.set("context-type", mime ?? MimeForm);
-      }
-    }
-    return req;
-  }
-  private async _fetch(ctx: Context, c: Chan<any>, url: URL, req: Request) {
+  private async _fetch(ctx: Context, c: Chan<any>, req: Request) {
     try {
       const opts = this.opts;
       const jar = opts?.jar;
       const f = opts?.fetch;
       if (jar) {
+        const url = new URL(req.url);
         // add cookie to request
         const cookies = await jar.cookies(ctx, url);
         if (cookies) {
@@ -480,90 +456,233 @@ export class Client {
       c.write(e);
     }
   }
-  downloadFile(
-    path: string,
-    url: string | URL,
-  ): Promise<void>;
-  downloadFile(
-    ctx: Context,
-    path: string,
-    url: string | URL,
-  ): Promise<void>;
-  downloadFile(...args: Array<any>): Promise<void> {
-    // parse arguments
-    let ctx: Context, path: string, u: string | URL | Request;
-    const arg = args[0];
-    if (typeof arg === "string") {
-      ctx = background();
-      path = arg;
-      u = args[1];
-    } else {
-      ctx = arg;
-      path = args[1];
-      u = args[2];
-    }
+  download(opts: DownloadOptions) {
     let url: URL;
-    if (typeof u === "string") {
-      url = new URL(u, this.opts?.baseURL);
-    } else if (u instanceof URL) {
-      url = u;
+    if (typeof opts.url === "string") {
+      url = new URL(opts.url, this.opts?.baseURL);
     } else {
-      url = new URL(u.url);
+      url = opts.url;
     }
-
     // serve
     return new Downloader({
       client: this,
-      ctx: ctx,
+      ctx: opts.ctx,
       url: url,
-      target: new LocalFile(path),
+      target: opts.target,
     }).serve();
   }
-  downloadTarget(
-    target: Target,
-    url: string | URL,
-  ): Promise<void>;
-  downloadTarget(
-    ctx: Context,
-    target: Target,
-    url: string | URL,
-  ): Promise<void>;
-  downloadTarget(...args: Array<any>): Promise<void> {
-    // parse arguments
-    let ctx: Context, target: Target;
-    let url: URL;
-    const arg = args[1];
-    if (typeof arg === "string") {
-      ctx = background();
-      target = args[0];
-      url = new URL(arg, this.opts?.baseURL);
-    } else if (arg instanceof URL) {
-      ctx = background();
-      target = args[0];
-      url = arg;
-    } else if (arg instanceof Request) {
-      ctx = background();
-      target = args[0];
-      url = new URL(arg.url);
-    } else {
-      ctx = args[0];
-      target = arg;
-      const u: string | URL | Request = arg[2];
-      if (typeof u === "string") {
-        url = new URL(u);
-      } else if (u instanceof URL) {
-        url = u;
-      } else {
-        url = new URL(u.url);
+}
+
+async function readMetdata(name: string, r: Deno.FsFile, output?: {
+  len?: number;
+}): Promise<Metadata> {
+  let b = new Uint8Array(2);
+  await readFull(r, b);
+  const size = new DataView(b.buffer).getUint16(0);
+  b = new Uint8Array(size);
+  if (output?.len !== undefined) {
+    output.len = size + 2;
+  }
+  await readFull(r, b);
+  const text = new TextDecoder().decode(b);
+  const md = JSON.parse(text);
+  const mt = md["mtime"];
+  if (!Number.isSafeInteger(mt)) {
+    throw new Error(`unknow medatata of ${name}: ${text}`);
+  }
+  const len = md["len"];
+  if (!Number.isSafeInteger(len)) {
+    throw new Error(`unknow medatata of ${name}: ${text}`);
+  }
+  return {
+    len: len,
+    mtime: mt > 0 ? new Date(mt) : undefined,
+  };
+}
+function copyToDst(dst: string, r: Deno.FsFile, mtime?: Date) {
+  return Defer.async(async (d) => {
+    const rc = d.defer(() => r.close());
+
+    const path = dst + ".ok";
+    const ok = await Deno.open(path, {
+      write: true,
+      truncate: true,
+      create: true,
+      mode: 0o664,
+    });
+    const okc = d.defer(() => ok.close());
+    rc.cancel();
+    await r.readable.pipeTo(ok.writable, {
+      preventClose: true,
+    });
+
+    okc.cancel();
+    ok.close();
+    if (mtime) {
+      await Deno.utime(path, 0, mtime);
+    }
+    await Deno.rename(path, dst);
+  });
+}
+class TemporaryFile {
+  constructor(
+    public readonly path: string,
+    public readonly len: number,
+    public readonly mtime?: Date,
+  ) {
+  }
+  async write(body: ReadableStream<Uint8Array>) {
+    let f: Deno.FsFile | undefined;
+    try {
+      f = await Deno.open(this.path, {
+        write: true,
+        truncate: true,
+        create: true,
+        mode: 0o664,
+      });
+      const md = new TextEncoder().encode(JSON.stringify({
+        len: this.len,
+        mtime: this.mtime?.getTime() ?? 0,
+      }));
+      const size = new ArrayBuffer(2);
+      new DataView(size).setUint16(0, md.length);
+      await f.write(new Uint8Array(size));
+      await f.write(md);
+
+      await body.pipeTo(f.writable, {
+        preventClose: true,
+      });
+    } finally {
+      f?.close();
+    }
+  }
+  async dst(dst: string) {
+    let r: Deno.FsFile | undefined = await Deno.open(this.path);
+    try {
+      const md = await readMetdata(this.path, r);
+      const src = r;
+      r = undefined;
+      await copyToDst(dst, src, md.mtime);
+
+      await Deno.remove(this.path);
+    } finally {
+      r?.close();
+    }
+  }
+}
+export class LocalFile implements Target {
+  constructor(public readonly path: string) {}
+  /**
+   * Returns the modification time of the target file, should return undefined if the file does not exist.
+   */
+  async mtime(): Promise<Date | undefined> {
+    try {
+      const stat = await Deno.stat(this.path);
+      const mtime = stat.mtime;
+      if (mtime) {
+        return mtime;
+      }
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) {
+        throw e;
       }
     }
+  }
+  /**
+   * Returns the archive download record or undefined if there is no record
+   */
+  record(): Promise<DownloadRecord | undefined> {
+    const path = this.path;
+    return LocalRecord.load(path, `${path}.denodwonload`);
+  }
+  toString() {
+    return `localfile: "${this.path}"`;
+  }
+  /**
+   * alternative target file
+   */
+  async replace(
+    body: ReadableStream<Uint8Array>,
+    len: number,
+    mtime?: Date,
+  ): Promise<void> {
+    const path = this.path;
+    const temp = `${path}.denodwonload`;
+    const f = new TemporaryFile(temp, len, mtime);
 
-    // serve
-    return new Downloader({
-      client: this,
-      ctx: ctx,
-      url: url,
-      target: target,
-    }).serve();
+    // write to temp
+    await f.write(body);
+    // write to target
+    await f.dst(this.path);
+  }
+}
+export class LocalRecord implements DownloadRecord {
+  static async load(dst: string, path: string): Promise<DownloadRecord | undefined> {
+    let f: Deno.FsFile | undefined;
+    try {
+      f = await Deno.open(path, {
+        read: true,
+        write: true,
+      });
+      const output = {
+        len: 0,
+      };
+      const md = await readMetdata(path, f, output);
+      const fs = f;
+      f = undefined;
+      return new LocalRecord(
+        dst,
+        path,
+        md,
+        output.len,
+        fs,
+      );
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) {
+        throw e;
+      }
+    } finally {
+      f?.close();
+    }
+  }
+  constructor(
+    public readonly target: string,
+    public readonly path: string,
+    public md: Metadata,
+    public readonly header: number,
+    public readonly f: Deno.FsFile,
+  ) {}
+  private clsoed_ = false;
+  async close(): Promise<void> {
+    if (this.clsoed_) {
+      return;
+    }
+    this.clsoed_ = true;
+    await this.f.close();
+  }
+  metadate(): Metadata {
+    return this.md;
+  }
+  async size(): Promise<number> {
+    return (await this.f.seek(0, Deno.SeekMode.End)) - this.header;
+  }
+  async toTarget() {
+    const r = this.f;
+    await r.seek(this.header, Deno.SeekMode.Start);
+    this.clsoed_ = true;
+    await copyToDst(this.target, r, this.md.mtime);
+    await Deno.remove(this.path);
+  }
+  async append(r: ReadableStream<Uint8Array>): Promise<void> {
+    const f = this.f;
+    await f.seek(0, Deno.SeekMode.End);
+    for await (const b of r) {
+      await f.write(b);
+    }
+    await this.toTarget();
+  }
+  async delete(): Promise<void> {
+    await this.close();
+    await Deno.remove(this.path);
   }
 }
