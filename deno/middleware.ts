@@ -1,6 +1,6 @@
 import { Context } from "./deps/easyts/context/context.ts";
 import { log } from "./log.ts";
-type NextHandle = (ctx: Context, request: Request) => Promise<Response>;
+export type NextHandle = (ctx: Context, request: Request) => Promise<Response>;
 
 export type Handle = (
   ctx: Context,

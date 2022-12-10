@@ -2,7 +2,7 @@ import { Client } from "../deno/client.ts";
 import { cookieString, readSetCookies } from "../deno/cookie.ts";
 import { background } from "../deno/deps/easyts/context/context.ts";
 
-import { Jar } from "../deno/jar.ts";
+import { createJar, Jar } from "../deno/jar.ts";
 import { createDelay, createMiddleware, logger } from "../deno/middleware.ts";
 import { MimeJSON } from "../deno/mime.ts";
 import { InternalServerError } from "../deno/status.ts";
@@ -65,12 +65,12 @@ async function basic(baseURL: string) {
 async function middleware(baseURL: string) {
   const client = new Client({
     baseURL: baseURL,
-    jar: new Jar(), // cookie jar
     // Set middleware to client interceptor
     fetch: createMiddleware(
       // Set the middleware, the middleware will execute the installation and setting order in sequence
       logger,
       createDelay(500),
+      createJar(new Jar()), // cookie jar in middleware
       // retry on 500 InternalServerError
       async (ctx, req, next) => {
         const resp = await next(ctx, req.clone());
@@ -101,7 +101,21 @@ async function middleware(baseURL: string) {
   try {
     await client.get(ctx, "http://192.168.0.222");
   } catch (e) {
-    console.log(e?.message);
+    console.log(
+      `timeout=${e?.timeout}`,
+      `temporary=${e?.temporary}`,
+      e?.message,
+    );
+  }
+
+  console.log("--------- cookie ---------");
+  for (let i = 0; i < 5; i++) {
+    const resp = await client.get(`cookie`);
+    const body = await resp.text();
+    const cookies = readSetCookies(resp.headers)?.map((v) => cookieString(v));
+    console.log(`body: ${body}
+  cookies: ${cookies}
+  `);
   }
 }
 

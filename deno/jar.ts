@@ -1,5 +1,6 @@
 import { Context } from "./deps/easyts/context/context.ts";
 import { Cookie } from "./cookie.ts";
+import { NextHandle } from "./middleware.ts";
 import {
   canonicalHost,
   defaultPath,
@@ -8,7 +9,7 @@ import {
   jarKey,
 } from "./internal/cookiejar.ts";
 import { CookieJar } from "./cookiejar.ts";
-import { SameSite } from "./internal/cookie.ts";
+import { addCookies, readSetCookies, SameSite } from "./internal/cookie.ts";
 
 // PublicSuffixList provides the public suffix of a domain. For example:
 //      - the public suffix of "example.com" is "com",
@@ -329,4 +330,28 @@ export class Jar implements CookieJar {
 
     return [e, false, false];
   }
+}
+
+export function createJar(jar: Jar) {
+  return async (
+    ctx: Context,
+    req: Request,
+    next: NextHandle,
+  ) => {
+    const url = new URL(req.url);
+    // add cookie to request
+    const cookies = await jar.cookies(ctx, url);
+    if (cookies) {
+      addCookies(req.headers, ...cookies);
+    }
+    const resp = await next(ctx, req);
+
+    // update set-cookies to jar
+    const sets = readSetCookies(resp.headers);
+    if (sets) {
+      await jar.setCookies(ctx, url, ...sets);
+    }
+
+    return resp;
+  };
 }

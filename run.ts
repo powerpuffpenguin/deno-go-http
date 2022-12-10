@@ -7,8 +7,8 @@ const tests = [
   //     url: "http://127.0.0.1/tools/a.mp4",
   //   },
   {
-    path: "./bin/b.tar.gz",
-    url: "http://webpc.cdnewstar.cn/shared/kb2022/webpc_linux_amd64.tar.gz",
+    path: "./bin/b.mp4",
+    url: "http://127.0.0.1/tools/Mass%20Effect%202%20Launch%20Trailer.mp4",
   },
 ];
 const c = new Client({
