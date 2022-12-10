@@ -11,6 +11,7 @@ import { CookieJar } from "./cookiejar.ts";
 import { MimeForm } from "./mime.ts";
 import { Downloader } from "./internal/downloader/downloader.ts";
 import { LocalFile } from "./internal/downloader/localsystem.ts";
+import { Target } from "./download.ts";
 export type LikeURLSearchParams =
   | string[][]
   | Record<string, string>
@@ -516,6 +517,53 @@ export class Client {
       ctx: ctx,
       url: url,
       target: new LocalFile(path),
+    }).serve();
+  }
+  downloadTarget(
+    target: Target,
+    url: string | URL,
+  ): Promise<void>;
+  downloadTarget(
+    ctx: Context,
+    target: Target,
+    url: string | URL,
+  ): Promise<void>;
+  downloadTarget(...args: Array<any>): Promise<void> {
+    // parse arguments
+    let ctx: Context, target: Target;
+    let url: URL;
+    const arg = args[1];
+    if (typeof arg === "string") {
+      ctx = background();
+      target = args[0];
+      url = new URL(arg, this.opts?.baseURL);
+    } else if (arg instanceof URL) {
+      ctx = background();
+      target = args[0];
+      url = arg;
+    } else if (arg instanceof Request) {
+      ctx = background();
+      target = args[0];
+      url = new URL(arg.url);
+    } else {
+      ctx = args[0];
+      target = arg;
+      const u: string | URL | Request = arg[2];
+      if (typeof u === "string") {
+        url = new URL(u);
+      } else if (u instanceof URL) {
+        url = u;
+      } else {
+        url = new URL(u.url);
+      }
+    }
+
+    // serve
+    return new Downloader({
+      client: this,
+      ctx: ctx,
+      url: url,
+      target: target,
     }).serve();
   }
 }

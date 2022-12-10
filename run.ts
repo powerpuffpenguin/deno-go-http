@@ -1,5 +1,4 @@
 import { Client } from "./deno/client.ts";
-import { Once } from "./deno/deps/easyts/sync/once.ts";
 
 const tests = [
   {

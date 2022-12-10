@@ -2,8 +2,20 @@ import { Context } from "../../deps/easyts/context/context.ts";
 import { DateTime } from "../../deps/luxon/luxon.js";
 import { log } from "../../log.ts";
 import { Method } from "../../method.ts";
-import { NotModified, OK } from "../../status.ts";
-import { Client, Metadata, Record, Target } from "./types.ts";
+import {
+  NotModified,
+  OK,
+  PartialContent,
+  RequestedRangeNotSatisfiable,
+} from "../../status.ts";
+import { Metadata, Record, Target } from "../../download.ts";
+export interface Client {
+  do(
+    ctx: Context,
+    req: string | URL,
+    init?: RequestInit,
+  ): Promise<Response>;
+}
 
 class SafeRecord implements Record {
   constructor(public native: Record) {}
@@ -24,6 +36,21 @@ class SafeRecord implements Record {
   }
   size(): Promise<number> | number {
     return this.native.size();
+  }
+  toTarget(): Promise<void> {
+    return this.native.toTarget();
+  }
+  append(r: ReadableStream<Uint8Array>) {
+    return this.native.append(r);
+  }
+  async delete(): Promise<void> {
+    this.closed_ = true;
+    try {
+      await this.native.delete();
+    } catch (e) {
+      log.warn(`record.delete error:`, e);
+    }
+    return;
   }
 }
 async function readText(resp: Response) {
@@ -52,8 +79,8 @@ export class Downloader {
     const r = await target.record();
     const record = r ? new SafeRecord(r) : undefined;
     try {
-      if (mtime === undefined) {
-        if (record) {
+      if (mtime === undefined) { // target alreay exists
+        if (record) { // temporary file exists
           const md = await record.metadate();
           if (md.mtime) {
             log.debug(`recover download to ${target}`);
@@ -63,13 +90,26 @@ export class Downloader {
         }
         log.debug(`first download to ${target}`);
         return this._new();
-      } else {
-        if (record === undefined) {
-          const m = DateTime.fromJSDate(mtime).toHTTP();
-          log.debug(`refash '${m}' ${target}`);
-          return this._refash(m);
-        }
       }
+
+      if (record === undefined) { // There is no temporary file to check whether the server has an update
+        const m = DateTime.fromJSDate(mtime).toHTTP();
+        log.debug(`refash '${m}' ${target}`);
+        return this._refash(m);
+      }
+      const md = await record.metadate();
+      if (md.mtime) {
+        log.debug(`recover download to ${target}`);
+        await this._recover(record, md);
+        return;
+      }
+
+      // delete invalid records
+      await record.delete();
+      // check server update
+      const m = DateTime.fromJSDate(mtime).toHTTP();
+      log.debug(`refash '${m}' ${target}`);
+      return this._refash(m);
     } finally {
       await record?.close();
     }
@@ -117,10 +157,10 @@ export class Downloader {
 
     switch (resp.status) {
       case NotModified:
-        log.info(`not modified ${opts.url} -> ${opts.target}`);
+        log.debug(`not modified ${opts.url} -> ${opts.target}`);
         return;
       case OK:
-        log.debug(`re-download abc ${opts.url} -> ${opts.target}`);
+        log.debug(`re-download ${opts.url} -> ${opts.target}`);
         return this._new();
     }
     const text = await readText(resp);
@@ -138,11 +178,60 @@ export class Downloader {
         await record.close();
         return this._new();
       } else if (begin == md.len) {
-        // recoverRefash
+        const m = DateTime.fromJSDate(md.mtime!).toHTTP();
+        log.debug(
+          `recover refash '${m}': ${opts.target}`,
+        );
+        return this.recoverRefash(record, m);
       }
-      log.debug(
-        `recover range(${begin},${md.len}): ${opts.target}`,
-      );
     }
+    log.debug(
+      `recover range(${begin},${md.len}): ${opts.target}`,
+    );
+    const resp = await opts.client.do(opts.ctx, opts.url, {
+      method: Method.Get,
+      headers: {
+        "If-Range": DateTime.fromJSDate(md.mtime!).toHTTP(),
+        "Range": `bytes=${begin}-`,
+      },
+    });
+    switch (resp.status) {
+      case OK:
+        log.debug(`re-download ${opts.url} -> ${opts.target}`);
+        await record.close();
+        return this._new(resp);
+      case RequestedRangeNotSatisfiable:
+        log.warn(
+          `recover 416 Range(bytes=${begin}-) Not Satisfiable ${opts.url} ${opts.target} `,
+        );
+        return this._new();
+      case PartialContent:
+        log.debug(`recover 206 Partial Content ${opts.url} ${opts.target}`);
+        return record.append(resp.body!);
+    }
+    const text = await readText(resp);
+    log.warn(`new ${opts.url} error: ${text}`);
+    throw new Error(text);
+  }
+  private async recoverRefash(record: Record, mt: string) {
+    const opts = this.opts;
+    const resp = await opts.client.do(opts.ctx, opts.url, {
+      method: Method.Get,
+      headers: {
+        "If-Modified-Since": mt,
+      },
+    });
+    switch (resp.status) {
+      case NotModified:
+        log.debug(`not modified ${opts.url} -> ${opts.target}`);
+        return record.toTarget();
+      case OK:
+        log.debug(`re-download ${opts.url} -> ${opts.target}`);
+        await record.close();
+        return this._new(resp);
+    }
+    const text = await readText(resp);
+    log.warn(`new ${opts.url} error: ${text}`);
+    throw new Error(text);
   }
 }

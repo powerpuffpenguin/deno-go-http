@@ -1,13 +1,3 @@
-import { Context } from "../../deps/easyts/context/context.ts";
-
-export interface Client {
-  do(
-    ctx: Context,
-    req: string | URL,
-    init?: RequestInit,
-  ): Promise<Response>;
-}
-
 /**
  * Define a target interface, the alternative interface can download the file to any system that implements the interface
  */
@@ -48,6 +38,19 @@ export interface Record {
    * The number of bytes downloaded
    */
   size(): Promise<number> | number;
+  /**
+   * The data has been downloaded and copied to the target location, and close
+   */
+  toTarget(): Promise<void>;
+
+  /**
+   * Add data and write to target file
+   */
+  append(r: ReadableStream<Uint8Array>): Promise<void>;
+  /**
+   * Delete invalid records and close
+   */
+  delete(): Promise<void>;
 }
 export interface Metadata {
   len: number;

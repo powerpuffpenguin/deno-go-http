@@ -2,6 +2,7 @@ export * from "./client.ts";
 export * from "./cookie.ts";
 export * from "./cookiejar.ts";
 export * from "./datetime.ts";
+export * from "./download.ts";
 export * from "./jar.ts";
 export * from "./method.ts";
 export * from "./middleware.ts";

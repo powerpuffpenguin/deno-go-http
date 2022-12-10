@@ -1,4 +1,4 @@
-import { Metadata, Record, Target } from "./types.ts";
+import { Metadata, Record, Target } from "../../download.ts";
 import { readFull } from "../../deps/easyts/io/io.ts";
 import { Defer } from "../../deps/easyts/defer.ts";
 
@@ -121,8 +121,8 @@ export class LocalFile implements Target {
    * Returns the archive download record or undefined if there is no record
    */
   record(): Promise<Record | undefined> {
-    const path = `${this.path}.denodwonload`;
-    return LocalRecord.load(path);
+    const path = this.path;
+    return LocalRecord.load(path, `${path}.denodwonload`);
   }
   toString() {
     return `localfile: "${this.path}"`;
@@ -146,7 +146,7 @@ export class LocalFile implements Target {
   }
 }
 export class LocalRecord implements Record {
-  static async load(path: string): Promise<Record | undefined> {
+  static async load(dst: string, path: string): Promise<Record | undefined> {
     let f: Deno.FsFile | undefined;
     try {
       f = await Deno.open(path, {
@@ -160,6 +160,7 @@ export class LocalRecord implements Record {
       const fs = f;
       f = undefined;
       return new LocalRecord(
+        dst,
         path,
         md,
         output.len,
@@ -174,6 +175,7 @@ export class LocalRecord implements Record {
     }
   }
   constructor(
+    public readonly target: string,
     public readonly path: string,
     public md: Metadata,
     public readonly header: number,
@@ -192,5 +194,24 @@ export class LocalRecord implements Record {
   }
   async size(): Promise<number> {
     return (await this.f.seek(0, Deno.SeekMode.End)) - this.header;
+  }
+  async toTarget() {
+    const r = this.f;
+    await r.seek(this.header, Deno.SeekMode.Start);
+    this.clsoed_ = true;
+    await copyToDst(this.target, r, this.md.mtime);
+    await Deno.remove(this.path);
+  }
+  async append(r: ReadableStream<Uint8Array>): Promise<void> {
+    const f = this.f;
+    await f.seek(0, Deno.SeekMode.End);
+    for await (const b of r) {
+      await f.write(b);
+    }
+    await this.toTarget();
+  }
+  async delete(): Promise<void> {
+    await this.close();
+    await Deno.remove(this.path);
   }
 }
