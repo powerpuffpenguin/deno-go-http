@@ -185,13 +185,14 @@ export class Downloader {
         return this.recoverRefash(record, m);
       }
     }
+    const m = DateTime.fromJSDate(md.mtime!).toHTTP();
     log.debug(
-      `recover range(${begin},${md.len}): ${opts.target}`,
+      `recover range(${begin},${md.len}) '${m}': ${opts.target}`,
     );
     const resp = await opts.client.do(opts.ctx, opts.url, {
       method: Method.Get,
       headers: {
-        "If-Range": DateTime.fromJSDate(md.mtime!).toHTTP(),
+        "If-Range": m,
         "Range": `bytes=${begin}-`,
       },
     });
