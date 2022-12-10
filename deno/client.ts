@@ -13,6 +13,10 @@ import { Downloader } from "./internal/downloader/downloader.ts";
 import { createFetch, Fetch, FetchInit } from "./internal/fetch.ts";
 export type { FetchInit } from "./internal/fetch.ts";
 export { LocalFile } from "./internal/downloader/localfile.ts";
+export type {
+  LocalFileEvent,
+  LocalFileOptions,
+} from "./internal/downloader/localfile.ts";
 
 export interface ClientOptions {
   /**

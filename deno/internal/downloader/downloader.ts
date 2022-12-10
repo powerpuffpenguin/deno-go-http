@@ -72,6 +72,10 @@ export class Downloader {
   constructor(public readonly opts: DownloaderOptions) {
   }
   async serve(): Promise<void> {
+    await this._serve();
+    this.opts.target.complete();
+  }
+  async _serve(): Promise<void> {
     const opts = this.opts;
     const target = opts.target;
     log.debug(`download ${opts.url} -> ${target}`);

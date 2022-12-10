@@ -58,6 +58,7 @@ class TemporaryFile {
     public readonly path: string,
     public readonly len: number,
     public readonly mtime?: Date,
+    public readonly opts?: LocalFileOptions,
   ) {
   }
   async write(body: ReadableStream<Uint8Array>) {
@@ -77,10 +78,22 @@ class TemporaryFile {
       new DataView(size).setUint16(0, md.length);
       await f.write(new Uint8Array(size));
       await f.write(md);
-
-      await body.pipeTo(f.writable, {
-        preventClose: true,
-      });
+      const on = this.opts?.onChanged;
+      if (on) {
+        let current = 0;
+        for await (const b of body) {
+          current += await f.write(b);
+          on({
+            event: "data",
+            current: current,
+            total: this.len == 0 ? undefined : this.len,
+          });
+        }
+      } else {
+        await body.pipeTo(f.writable, {
+          preventClose: true,
+        });
+      }
     } finally {
       f?.close();
     }
@@ -91,6 +104,10 @@ class TemporaryFile {
       const md = await readMetdata(this.path, r);
       const src = r;
       r = undefined;
+      const on = this.opts?.onChanged;
+      if (on) {
+        on({ event: "copy" });
+      }
       await copyToDst(dst, src, md.mtime);
 
       await Deno.remove(this.path);
@@ -99,8 +116,19 @@ class TemporaryFile {
     }
   }
 }
+export interface LocalFileEvent {
+  event: "ok" | "data" | "copy";
+  current?: number;
+  total?: number;
+}
+export interface LocalFileOptions {
+  onChanged(evt: LocalFileEvent): void;
+}
 export class LocalFile implements Target {
-  constructor(public readonly path: string) {}
+  constructor(
+    public readonly path: string,
+    public readonly opts?: LocalFileOptions,
+  ) {}
   /**
    * Returns the modification time of the target file, should return undefined if the file does not exist.
    */
@@ -122,7 +150,7 @@ export class LocalFile implements Target {
    */
   record(): Promise<DownloadRecord | undefined> {
     const path = this.path;
-    return LocalRecord.load(path, `${path}.denodwonload`);
+    return LocalRecord.load(path, `${path}.denodwonload`, this.opts);
   }
   toString() {
     return `localfile: "${this.path}"`;
@@ -137,18 +165,25 @@ export class LocalFile implements Target {
   ): Promise<void> {
     const path = this.path;
     const temp = `${path}.denodwonload`;
-    const f = new TemporaryFile(temp, len, mtime);
+    const f = new TemporaryFile(temp, len, mtime, this.opts);
 
     // write to temp
     await f.write(body);
     // write to target
     await f.dst(this.path);
   }
+  complete(): void {
+    const on = this.opts?.onChanged;
+    if (on) {
+      on({ event: "ok" });
+    }
+  }
 }
-export class LocalRecord implements DownloadRecord {
+class LocalRecord implements DownloadRecord {
   static async load(
     dst: string,
     path: string,
+    opts?: LocalFileOptions,
   ): Promise<DownloadRecord | undefined> {
     let f: Deno.FsFile | undefined;
     try {
@@ -168,6 +203,7 @@ export class LocalRecord implements DownloadRecord {
         md,
         output.len,
         fs,
+        opts,
       );
     } catch (e) {
       if (!(e instanceof Deno.errors.NotFound)) {
@@ -183,6 +219,7 @@ export class LocalRecord implements DownloadRecord {
     public md: Metadata,
     public readonly header: number,
     public readonly f: Deno.FsFile,
+    public readonly opts?: LocalFileOptions,
   ) {}
   private clsoed_ = false;
   async close(): Promise<void> {
@@ -202,16 +239,39 @@ export class LocalRecord implements DownloadRecord {
     const r = this.f;
     await r.seek(this.header, Deno.SeekMode.Start);
     this.clsoed_ = true;
+    const on = this.opts?.onChanged;
+    if (on) {
+      on({ event: "copy" });
+    }
     await copyToDst(this.target, r, this.md.mtime);
     await Deno.remove(this.path);
   }
   async append(r: ReadableStream<Uint8Array>): Promise<void> {
     const f = this.f;
-    await f.seek(0, Deno.SeekMode.End);
-    for await (const b of r) {
-      await f.write(b);
+    let current = await f.seek(0, Deno.SeekMode.End) - this.header;
+    const on = this.opts?.onChanged;
+    if (on) {
+      const total = this.md.len;
+      on({
+        event: "ok",
+        current: current,
+        total: total,
+      });
+      for await (const b of r) {
+        current += await f.write(b);
+        on({
+          event: "ok",
+          current: current,
+          total: total,
+        });
+      }
+      await this.toTarget();
+    } else {
+      for await (const b of r) {
+        await f.write(b);
+      }
+      await this.toTarget();
     }
-    await this.toTarget();
   }
   async delete(): Promise<void> {
     await this.close();

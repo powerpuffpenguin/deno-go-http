@@ -19,6 +19,10 @@ const c = new Client({
 for (const tt of tests) {
   await c.download({
     url: tt.url,
-    target: new LocalFile(tt.path),
+    target: new LocalFile(tt.path, {
+      onChanged(evt) {
+        console.log(evt);
+      },
+    }),
   });
 }

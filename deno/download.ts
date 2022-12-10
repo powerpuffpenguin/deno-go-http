@@ -5,11 +5,11 @@ export interface Target {
   /**
    * Returns the modification time of the target file, should return undefined if the file does not exist.
    */
-  mtime(): Promise<Date | undefined>;
+  mtime(): Promise<Date | undefined> | Date | undefined;
   /**
    * Returns the archive download record or undefined if there is no record
    */
-  record(): Promise<DownloadRecord | undefined>;
+  record(): Promise<DownloadRecord | undefined> | DownloadRecord | undefined;
 
   /**
    * alternative target file
@@ -18,7 +18,11 @@ export interface Target {
     body: ReadableStream<Uint8Array>,
     len: number,
     mtime?: Date,
-  ): Promise<void>;
+  ): Promise<void> | void;
+  /**
+   * Notify that the download is complete
+   */
+  complete(): Promise<void> | void;
 }
 
 /**
