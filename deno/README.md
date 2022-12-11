@@ -17,6 +17,7 @@ cookiejar middleware are needed, so I developed this library
 
 - [quick start](#quick-start)
   - [constructor](#constructor)
+  - [download](#download)
 - [context](#context) timeout and deadline
 - [cookiejar](#cookiejar)
 - [middleware](#middleware)
@@ -61,6 +62,10 @@ export interface FetchInit extends RequestInit {
    * if has body set context-type
    */
   contextType?: string;
+  /**
+   * Set UserAgent in headers
+   */
+  userAgent?: string;
 }
 ```
 
@@ -91,7 +96,7 @@ class Client{
 }
 ```
 
-# constructor
+## constructor
 
 The Client constructor accepts an optional parameter ClientOptions
 
@@ -114,6 +119,38 @@ export interface ClientOptions {
     request: Request,
   ) => Promise<Response>;
 }
+```
+
+## download
+
+Client provides a download function that can be used to download files, it can
+correctly use 'If-Range' 'Range' 'If-Modified-Since' to communicate with the
+server
+
+```
+class Client{
+  download(opts: DownloadOptions) download(opts: DownloadOptions) {
+}
+
+export interface DownloadOptions {
+  context?: Context;
+  url: URL | string;
+  target: Target;
+}
+```
+
+Target is an abstract interface, you can use the predefined LocalFileEvent to
+download files to the local file system
+
+```
+new Client().download({
+  url: url,
+  target: new LocalFile(path, {
+    onChanged(evt) {
+      console.log(evt);
+    },
+  }),
+});
 ```
 
 # context

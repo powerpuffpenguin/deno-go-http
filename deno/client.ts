@@ -87,6 +87,9 @@ export class Client {
         req.headers.set("context-type", f.contextType ?? MimeForm);
       }
     }
+    if (f.userAgent && !req.headers.has("user-agent")) {
+      req.headers.set("user-agent", f.userAgent);
+    }
     const ctx = f.ctx;
 
     const signalChan = new Chan<any>();

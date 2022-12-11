@@ -28,6 +28,10 @@ export interface FetchInit extends RequestInit {
    * if has body set context-type
    */
   contextType?: string;
+  /**
+   * Set UserAgent in headers
+   */
+  userAgent?: string;
 }
 export function createInit(
   init?: FetchInit,
@@ -124,6 +128,7 @@ export function createFetch(
       url,
       req,
       init?.contextType ?? def?.contextType,
+      init?.userAgent ?? def?.userAgent,
     );
   } catch (e) {
     ctx.cancel();
@@ -187,6 +192,7 @@ export class Fetch {
     public readonly url: URL,
     init: RequestInit,
     public readonly contextType?: string,
+    public readonly userAgent?: string,
   ) {
     init.signal = this.abort.signal;
     this.request = new Request(url, init);
