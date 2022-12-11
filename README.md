@@ -1,6 +1,6 @@
 # deno-go-http
 
-deno's golang style http client library
+deno's http client library
 
 [document](deno/README.md)
 
@@ -18,21 +18,25 @@ console.log(resp.status, resp.statusText);
 // post form
 resp = await c.post(
   "https://deno.land",
-  new URLSearchParams({
-    id: "1",
-    lv: "2",
-  }),
+  {
+    body: new URLSearchParams({
+      id: "1",
+      lv: "2",
+    }),
+  },
 );
 console.log(resp.status, resp.statusText);
 
 // post json
 resp = await c.post(
   "https://deno.land",
-  JSON.stringify({
-    id: "1",
-    lv: "2",
-  }),
-  MimeJSON,
+  {
+    contextType: MimeJSON,
+    body: JSON.stringify({
+      id: "1",
+      lv: "2",
+    }),
+  },
 );
 console.log(resp.status, resp.statusText);
 ```

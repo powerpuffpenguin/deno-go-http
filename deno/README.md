@@ -1,21 +1,16 @@
 # deno-go-http
 
-deno's golang style http client library
+deno's http client library
 
-This is a golang-style deno http client library. why goalng? Because I think
-deno is similar to golang in some places and I am obsessed with golang. I have
-been looking for a script that is as comfortable as writing golang until I found
-deno.
+The fetch api is very useful, but for the client, some functions such as
+cookiejar middleware are needed, so I developed this library
 
 # Features
 
-- Simple to use, the api is similar to the original fetch api
+- Consistent with fetch api usage
 - With the help of the [easyts](https://github.com/powerpuffpenguin/easyts)
-  library, it supports the Context interface of golang, which can be operated
-  together with chan select, etc.(Thanks to function overloading you can also
-  ignore Context and use js original AbortController)
-- Define and support Cookiejar interface (a class Jar that implements the
-  interface is provided, and you can also implement it yourself)
+  library, it supports the Context interface of golang
+- Ported cookie and cookiejar according to golang standard library
 - Supports middleware, which can be used to set token retry requests, etc.
 
 # Index
@@ -28,8 +23,8 @@ deno.
 
 # quick-start
 
-You have to instantiate a class Client, which encapsulates all the internal
-trivialities of replication and only develops a simple and easy-to-use interface
+You need to create an instance of Client and specify some job details (such as
+cookiejar and middleware), or simply use the default settings
 
 ```
 import { Client } from "https://deno.land/x/gohttp/mod.ts";
@@ -37,56 +32,75 @@ import { Client } from "https://deno.land/x/gohttp/mod.ts";
 const c = new Client();
 ```
 
-Now you can use the do method to send the request, which is similar to the
-parameters that fetch receives
+client provides a fetch function, its usage is almost the same as that of
+webapi's fetch
 
 ```
-const resp:Response = await c.do('https://deno.land/')
+class Client{
+  fetch(input: string | URL | Request, init?: FetchInit): Promise<Response>
+}
+
+export interface FetchInit extends RequestInit {
+  /**
+   * like golang context
+   */
+  context?: Context;
+  /**
+   * base url
+   */
+  url?: URL;
+  /**
+   * query params
+   */
+  search?:
+    | string[][]
+    | Record<string, string>
+    | string
+    | URLSearchParams;
+  /**
+   * if has body set context-type
+   */
+  contextType?: string;
+}
 ```
 
-In addition, the client provides several shortcut functions
+As you can see, FetchInit is derived from RequestInit so you can use
+Client.fetch according to the fetch experience
+
+Additionally FetchInit extends several optional parameters:
+
+- **context** Similar to golang's context, you can use it to control request
+  cancellation or timeout
+- **url** Set a base url for the requested url, which will eventually call new
+  URL(input, url)
+- **search** Set the query parameter in the request url to this value
+- **contextType** If the request sets the body, set context-type to this value
+  in the header
+
+Finally, the client still provides several shortcut functions, which will
+automatically set the method attribute of the request
 
 ```
-c.get(url)
-c.get(url,search)
-
-c.post(url)
-c.post(url,body)
-c.post(url,body,contextType)
+class Client{
+  get(input: string | URL | Request, init?: FetchInit): Promise<Response>
+  head(input: string | URL | Request, init?: FetchInit): Promise<Response>
+  delete(input: string | URL | Request, init?: FetchInit): Promise<Response>
+  post(input: string | URL | Request, init?: FetchInit): Promise<Response>
+  put(input: string | URL | Request, init?: FetchInit): Promise<Response>
+  patch(input: string | URL | Request, init?: FetchInit): Promise<Response>
+}
 ```
-
-- Client also provides delete head two functions, their usage is exactly the
-  same as get
-- Client also provides put patch two functions, their usage is exactly the same
-  as post
 
 # constructor
 
-The constructor of Client can accept a url as the baseurl for all requests:
-
-```
-new Client("https://deno.land/)
-```
-
-In addition, a ClientOptions can also be accepted to accept more detailed
-settings:
+The Client constructor accepts an optional parameter ClientOptions
 
 ```
 export interface ClientOptions {
   /**
-   * All request's parent Context
-   */
-  readonly ctx?: Context;
-  /**
-   * If the requested url is not an absolute path, use this as baseurl
-   *
-   * new URL(url,baseURL)
-   */
-  readonly baseURL?: URL | string;
-  /**
    * Similar to RequestInit but without body and window properties, can set some default values for all requests
    */
-  readonly init?: ClientInit;
+  readonly init?: FetchInit;
   /**
    * If set will automatically handle cookies for the client
    */
@@ -96,6 +110,7 @@ export interface ClientOptions {
    */
   readonly fetch?: (
     ctx: Context,
+    url: URL,
     request: Request,
   ) => Promise<Response>;
 }
@@ -103,8 +118,8 @@ export interface ClientOptions {
 
 # context
 
-The function provided by Client can set the first incoming parameter as Context,
-which can simply send a request with a timeout or deadline
+Client supports golang's Context, you can easily set a timeout for the request
+or cancel the request
 
 > The usage of Context is exactly the same as that of golang, please refer to
 > the documentation of golang. In addition, the Context and Chan use the
@@ -112,15 +127,17 @@ which can simply send a request with a timeout or deadline
 
 ```
 import { Client } from "https://deno.land/x/gohttp/mod.ts";
-import { background, errDeadlineExceeded } from "https://deno.land/x/gohttp/deps/easyts/context.ts";
+import { background, errDeadlineExceeded } from "https://deno.land/x/gohttp/deps/easyts/context/context.ts";
 
 // You can also set a deadline using withDeadline
 const ctx = background().withTimeout(1000); // timeout 1s
 
 try {
-  await new Client().get(ctx, "http://192.168.0.2:9000");
+  await new Client().get("http://192.168.0.2:9000", {
+    context: ctx,
+  });
 } catch (e) {
-  console.log(errDeadlineExceeded.is(e));
+  console.log(e.timeout);
   console.log(e.message);
 }
 ```
@@ -191,7 +208,7 @@ new Client({
     // This middleware will print the time spent from request to response and has responded to status
     logger,
     // implement a middleware
-    async (ctx, req, next) => {
+    async (ctx, url, req, next) => {
       if (ctx.isClosed) { // The request has exceeded the deadline or was canceled by other callers
         // throws an error
         throw ctx.err;
@@ -200,7 +217,7 @@ new Client({
       // ...
 
       // Execute the next middleware
-      const resp = await next(ctx, req);
+      const resp = await next(ctx, url, req);
 
       // Perform some actions after receiving the response
       // ...
